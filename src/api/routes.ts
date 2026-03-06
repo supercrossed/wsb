@@ -1,4 +1,6 @@
 import { Router, Request, Response } from "express";
+import os from "os";
+import fs from "fs";
 
 import {
   getTodaySentiment,
@@ -239,6 +241,93 @@ router.get("/api/cramer", (_req: Request, res: Response) => {
   });
 
   res.json({ ...index, recentPicks: recentWithVerdict });
+});
+
+// --- Hardware monitoring ---
+
+let prevNetRx = 0;
+let prevNetTx = 0;
+let prevNetTime = 0;
+
+function getNetworkBytes(): { rx: number; tx: number } {
+  try {
+    const data = fs.readFileSync("/proc/net/dev", "utf-8");
+    let totalRx = 0;
+    let totalTx = 0;
+    for (const line of data.split("\n").slice(2)) {
+      const parts = line.trim().split(/\s+/);
+      if (!parts[0] || parts[0] === "lo:") continue;
+      totalRx += parseInt(parts[1], 10) || 0;
+      totalTx += parseInt(parts[9], 10) || 0;
+    }
+    return { rx: totalRx, tx: totalTx };
+  } catch {
+    return { rx: 0, tx: 0 };
+  }
+}
+
+let prevCpuIdle = 0;
+let prevCpuTotal = 0;
+
+function getCpuUsage(): number {
+  try {
+    const stat = fs.readFileSync("/proc/stat", "utf-8");
+    const cpuLine = stat.split("\n")[0];
+    const parts = cpuLine.split(/\s+/).slice(1).map(Number);
+    const idle = parts[3] + (parts[4] || 0);
+    const total = parts.reduce((a, b) => a + b, 0);
+    const diffIdle = idle - prevCpuIdle;
+    const diffTotal = total - prevCpuTotal;
+    prevCpuIdle = idle;
+    prevCpuTotal = total;
+    if (diffTotal === 0) return 0;
+    return Math.round((1 - diffIdle / diffTotal) * 10000) / 100;
+  } catch {
+    // Fallback for non-Linux: use os.loadavg
+    const cpus = os.cpus().length;
+    return Math.round((os.loadavg()[0] / cpus) * 10000) / 100;
+  }
+}
+
+/**
+ * GET /api/system
+ * Returns CPU, RAM, and network stats for the host machine.
+ */
+router.get("/api/system", (_req: Request, res: Response) => {
+  const totalMem = os.totalmem();
+  const freeMem = os.freemem();
+  const usedMem = totalMem - freeMem;
+
+  const cpu = getCpuUsage();
+
+  const now = Date.now();
+  const net = getNetworkBytes();
+  const elapsed = prevNetTime > 0 ? (now - prevNetTime) / 1000 : 1;
+  const rxRate = prevNetTime > 0 ? (net.rx - prevNetRx) / elapsed : 0;
+  const txRate = prevNetTime > 0 ? (net.tx - prevNetTx) / elapsed : 0;
+  prevNetRx = net.rx;
+  prevNetTx = net.tx;
+  prevNetTime = now;
+
+  const uptime = os.uptime();
+
+  res.json({
+    cpu,
+    ram: {
+      total: totalMem,
+      used: usedMem,
+      percent: Math.round((usedMem / totalMem) * 10000) / 100,
+    },
+    network: {
+      rxBytesPerSec: Math.round(rxRate),
+      txBytesPerSec: Math.round(txRate),
+    },
+    uptime,
+    hostname: os.hostname(),
+    loadAvg: os.loadavg(),
+    cpuCount: os.cpus().length,
+    cpuModel: os.cpus()[0]?.model ?? "unknown",
+  });
 });
 
 export { router };

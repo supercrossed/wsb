@@ -159,6 +159,81 @@
       letter-spacing: 0.12em;
     }
 
+    /* Hardware monitor card */
+    .hw-card {
+      margin-top: 20px;
+      padding: 18px 28px;
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      flex-wrap: wrap;
+    }
+    .hw-card .hw-label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .hw-card .hw-stats {
+      display: flex;
+      gap: 28px;
+      flex: 1;
+      flex-wrap: wrap;
+    }
+    .hw-stat {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 120px;
+    }
+    .hw-stat .hw-stat-label {
+      font-size: 0.6rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+    }
+    .hw-stat .hw-stat-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .hw-stat .hw-bar {
+      height: 4px;
+      border-radius: 2px;
+      background: var(--surface-raised);
+      overflow: hidden;
+      margin-top: 2px;
+    }
+    .hw-stat .hw-bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.5s ease;
+    }
+    .hw-bar-fill.green { background: var(--green); }
+    .hw-bar-fill.yellow { background: var(--yellow); }
+    .hw-bar-fill.red { background: var(--red); }
+    .hw-stat .hw-stat-sub {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.6rem;
+      color: var(--text-muted);
+    }
+    .hw-uptime {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-left: auto;
+      white-space: nowrap;
+    }
+    @media (max-width: 768px) {
+      .hw-card { gap: 16px; padding: 16px; }
+      .hw-stats { gap: 16px; }
+      .hw-uptime { margin-left: 0; width: 100%; }
+    }
+
     /* Recommendation card */
     .recommendation {
       text-align: center;
@@ -664,6 +739,34 @@
           <span class="spy-streak-label">Last 5:</span>
         </div>
       </div>
+      <!-- Hardware Monitor -->
+      <div class="card hw-card" id="hwCard">
+        <div class="hw-label">System</div>
+        <div class="hw-stats">
+          <div class="hw-stat">
+            <span class="hw-stat-label">CPU</span>
+            <span class="hw-stat-value" id="hwCpu">--%</span>
+            <div class="hw-bar"><div class="hw-bar-fill green" id="hwCpuBar" style="width:0%"></div></div>
+            <span class="hw-stat-sub" id="hwCpuSub">--</span>
+          </div>
+          <div class="hw-stat">
+            <span class="hw-stat-label">RAM</span>
+            <span class="hw-stat-value" id="hwRam">--%</span>
+            <div class="hw-bar"><div class="hw-bar-fill green" id="hwRamBar" style="width:0%"></div></div>
+            <span class="hw-stat-sub" id="hwRamSub">--</span>
+          </div>
+          <div class="hw-stat">
+            <span class="hw-stat-label">Net RX</span>
+            <span class="hw-stat-value" id="hwNetRx">--</span>
+          </div>
+          <div class="hw-stat">
+            <span class="hw-stat-label">Net TX</span>
+            <span class="hw-stat-value" id="hwNetTx">--</span>
+          </div>
+        </div>
+        <div class="hw-uptime" id="hwUptime">--</div>
+      </div>
+
       <div class="updated" id="lastUpdated"></div>
     </div>
   </div>
@@ -1311,15 +1414,68 @@
       }
     }
 
+    function formatBytes(bytes) {
+      if (bytes < 1024) return bytes + ' B/s';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB/s';
+      return (bytes / (1024 * 1024)).toFixed(2) + ' MB/s';
+    }
+
+    function formatUptime(seconds) {
+      var d = Math.floor(seconds / 86400);
+      var h = Math.floor((seconds % 86400) / 3600);
+      var m = Math.floor((seconds % 3600) / 60);
+      if (d > 0) return d + 'd ' + h + 'h ' + m + 'm';
+      if (h > 0) return h + 'h ' + m + 'm';
+      return m + 'm';
+    }
+
+    function barColor(pct) {
+      if (pct > 85) return 'red';
+      if (pct > 60) return 'yellow';
+      return 'green';
+    }
+
+    function formatMB(bytes) {
+      return (bytes / (1024 * 1024)).toFixed(0) + ' MB';
+    }
+
+    async function fetchSystemStats() {
+      try {
+        var res = await fetch('/api/system');
+        var d = await res.json();
+
+        document.getElementById('hwCpu').textContent = d.cpu.toFixed(1) + '%';
+        var cpuBar = document.getElementById('hwCpuBar');
+        cpuBar.style.width = Math.min(d.cpu, 100) + '%';
+        cpuBar.className = 'hw-bar-fill ' + barColor(d.cpu);
+        document.getElementById('hwCpuSub').textContent = d.cpuCount + 'x ' + (d.cpuModel.length > 20 ? d.cpuModel.substring(0, 20) + '...' : d.cpuModel);
+
+        document.getElementById('hwRam').textContent = d.ram.percent.toFixed(1) + '%';
+        var ramBar = document.getElementById('hwRamBar');
+        ramBar.style.width = Math.min(d.ram.percent, 100) + '%';
+        ramBar.className = 'hw-bar-fill ' + barColor(d.ram.percent);
+        document.getElementById('hwRamSub').textContent = formatMB(d.ram.used) + ' / ' + formatMB(d.ram.total);
+
+        document.getElementById('hwNetRx').textContent = formatBytes(d.network.rxBytesPerSec);
+        document.getElementById('hwNetTx').textContent = formatBytes(d.network.txBytesPerSec);
+
+        document.getElementById('hwUptime').textContent = d.hostname + ' up ' + formatUptime(d.uptime);
+      } catch (err) {
+        console.warn('System stats fetch failed:', err);
+      }
+    }
+
     // Initial fetch + polling
     fetchSentiment();
     fetchSpyRealtime();
     fetchSpyScorecard();
     fetchCramerIndex();
+    fetchSystemStats();
     setInterval(fetchSentiment, 30000);
     setInterval(fetchSpyRealtime, 5000);
     setInterval(fetchSpyScorecard, 10000);
     setInterval(fetchCramerIndex, 300000);
+    setInterval(fetchSystemStats, 3000);
   </script>
 </body>
 </html>

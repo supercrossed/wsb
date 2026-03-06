@@ -258,6 +258,63 @@ export function getTopPosts(date: string): TopPost[] {
   }));
 }
 
+export function saveHistoricalEntry(
+  date: string,
+  wsbSentiment: string,
+  inverseRecommendation: string,
+): void {
+  const stmt = getDb().prepare(`
+    INSERT OR IGNORE INTO historical (date, wsb_sentiment, inverse_recommendation)
+    VALUES (?, ?, ?)
+  `);
+  stmt.run(date, wsbSentiment, inverseRecommendation);
+}
+
+export function updateSpyPrices(
+  date: string,
+  spyOpen: number,
+  spyClose: number,
+  spyChange: number,
+): void {
+  const stmt = getDb().prepare(`
+    UPDATE historical SET spy_open = ?, spy_close = ?, spy_change = ? WHERE date = ?
+  `);
+  stmt.run(spyOpen, spyClose, spyChange, date);
+
+  // Auto-compute inverse_correct: if inverse says BUY/CALLS and SPY went up, correct.
+  // If inverse says SELL/PUTS and SPY went down, correct.
+  const row = getDb()
+    .prepare("SELECT inverse_recommendation FROM historical WHERE date = ?")
+    .get(date) as { inverse_recommendation: string } | undefined;
+
+  if (row && spyChange !== 0) {
+    const rec = row.inverse_recommendation;
+    const spyUp = spyChange > 0;
+    const inverseCorrect =
+      (rec === "CALLS" && spyUp) || (rec === "PUTS" && !spyUp) ? 1 : 0;
+    getDb()
+      .prepare("UPDATE historical SET inverse_correct = ? WHERE date = ?")
+      .run(inverseCorrect, date);
+  }
+}
+
+export function bulkUpsertSpyPrices(
+  prices: Array<{ date: string; open: number; close: number; change: number }>,
+): void {
+  const insertStmt = getDb().prepare(`
+    INSERT INTO historical (date, wsb_sentiment, inverse_recommendation, spy_open, spy_close, spy_change)
+    VALUES (?, 'unknown', 'HOLD', ?, ?, ?)
+    ON CONFLICT(date) DO UPDATE SET spy_open = ?, spy_close = ?, spy_change = ?
+  `);
+
+  const transaction = getDb().transaction(() => {
+    for (const p of prices) {
+      insertStmt.run(p.date, p.open, p.close, p.change, p.open, p.close, p.change);
+    }
+  });
+  transaction();
+}
+
 export function purgeOldData(): void {
   // Comments: only keep today and yesterday (for overnight thread analysis)
   const twoDaysAgo = Math.floor(Date.now() / 1000) - 2 * 86400;

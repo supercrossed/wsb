@@ -14,9 +14,12 @@ import {
   saveFullComment,
   saveDailySentiment,
   saveTopPost,
+  saveHistoricalEntry,
+  bulkUpsertSpyPrices,
   getCommentCountSince,
   purgeOldData,
 } from "./database";
+import { fetchSpyPrices } from "./spy";
 import type { DailySentiment, ThreadType, TopPost } from "../types";
 
 let isPolling = false;
@@ -184,6 +187,10 @@ async function pollAndAnalyze(): Promise<void> {
 
     saveDailySentiment(dailySentiment);
 
+    // Save historical entry for inverse strategy tracking
+    const wsbSentiment = bullishPercent > bearishPercent ? "bullish" : "bearish";
+    saveHistoricalEntry(getTodayDateString(), wsbSentiment, recommendation);
+
     logger.info("Poll complete", {
       fetched: comments.length,
       new: newCount,
@@ -206,13 +213,23 @@ export function startScheduler(): void {
   const intervalMs = config.sentiment.pollIntervalMs;
   logger.info("Starting comment poller", { intervalMs });
 
-  // Initial poll
+  // Initial poll + SPY backfill
   pollAndAnalyze();
+  backfillSpyPrices();
 
   // Recurring poll
   setInterval(() => {
     pollAndAnalyze();
   }, intervalMs);
+
+  // Update SPY prices daily at 5 PM EST (after market close + settlement)
+  cron.schedule(
+    "0 17 * * 1-5",
+    () => {
+      backfillSpyPrices();
+    },
+    { timezone: "America/New_York" },
+  );
 
   // Daily cleanup: purge old comments at midnight EST
   cron.schedule(
@@ -224,6 +241,21 @@ export function startScheduler(): void {
   );
 
   logger.info("Scheduler started");
+}
+
+/**
+ * Backfills SPY price data for the last 90 days into the historical table.
+ * Safe to call multiple times — uses ON CONFLICT DO UPDATE.
+ */
+async function backfillSpyPrices(): Promise<void> {
+  try {
+    const prices = await fetchSpyPrices(90);
+    bulkUpsertSpyPrices(prices);
+    logger.info("SPY price backfill complete", { days: prices.length });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn("SPY price backfill failed", { error: message });
+  }
 }
 
 // Allow manual trigger for API

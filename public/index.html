@@ -345,6 +345,37 @@
       padding: 48px 24px;
       font-size: 0.9rem;
     }
+
+    /* SPY ticker strip */
+    .spy-strip {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      justify-content: center;
+      padding: 10px 0 0;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .spy-strip .spy-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .spy-strip .spy-price {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .spy-strip .spy-change {
+      font-size: 0.85rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 6px;
+    }
+    .spy-strip .spy-change.up { color: var(--green); background: var(--green-dim); }
+    .spy-strip .spy-change.down { color: var(--red); background: var(--red-dim); }
+    .spy-strip .spy-change.flat { color: var(--yellow); background: var(--yellow-dim); }
   </style>
 </head>
 <body>
@@ -404,6 +435,11 @@
           <div class="action hold" id="recommendation">--</div>
           <div class="rec-explanation" id="recExplanation">Waiting for data...</div>
         </div>
+      </div>
+      <div class="spy-strip" id="spyStrip" style="display:none;">
+        <span class="spy-label">SPY</span>
+        <span class="spy-price" id="spyPrice">--</span>
+        <span class="spy-change flat" id="spyChange">--</span>
       </div>
       <div class="updated" id="lastUpdated"></div>
     </div>
@@ -608,14 +644,14 @@
         const sentData = await sentRes.json();
         const histData = await histRes.json();
 
-        renderHistoryChart(sentData.entries);
+        renderHistoryChart(sentData.entries, histData.entries);
         renderAccuracyChart(histData.entries);
       } catch {
         /* silently fail */
       }
     }
 
-    function renderHistoryChart(entries) {
+    function renderHistoryChart(entries, historicalEntries) {
       const ctx = document.getElementById('historyChart').getContext('2d');
       if (historyChartInstance) historyChartInstance.destroy();
 
@@ -624,45 +660,86 @@
         return;
       }
 
+      // Build a map of date -> spy close price from historical entries
+      const spyMap = {};
+      if (historicalEntries) {
+        for (const h of historicalEntries) {
+          if (h.spyClose != null) spyMap[h.date] = h.spyClose;
+        }
+      }
+
+      const datasets = [
+        {
+          label: 'Bullish %',
+          data: entries.map(e => e.bullishPercent),
+          borderColor: '#00ff87',
+          backgroundColor: 'rgba(0,255,135,0.06)',
+          fill: true,
+          tension: 0.4,
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: '#00ff87',
+          yAxisID: 'y',
+        },
+        {
+          label: 'Bearish %',
+          data: entries.map(e => e.bearishPercent),
+          borderColor: '#ff3b5c',
+          backgroundColor: 'rgba(255,59,92,0.06)',
+          fill: true,
+          tension: 0.4,
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: '#ff3b5c',
+          yAxisID: 'y',
+        },
+      ];
+
+      // Add SPY price overlay if we have data
+      const spyDataPoints = entries.map(e => spyMap[e.date] ?? null);
+      const hasSpyData = spyDataPoints.some(v => v !== null);
+
+      if (hasSpyData) {
+        datasets.push({
+          label: 'SPY Close',
+          data: spyDataPoints,
+          borderColor: '#ffb800',
+          backgroundColor: 'transparent',
+          tension: 0.4,
+          borderWidth: 2,
+          borderDash: [6, 3],
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: '#ffb800',
+          yAxisID: 'y1',
+          spanGaps: true,
+        });
+      }
+
+      const scales = {
+        x: { ticks: { color: '#6e7a88', maxTicksLimit: 12, font: { size: 10, family: 'JetBrains Mono' } }, grid: { color: 'rgba(30,39,50,0.6)' } },
+        y: { position: 'left', ticks: { color: '#6e7a88', font: { size: 10, family: 'JetBrains Mono' } }, grid: { color: 'rgba(30,39,50,0.6)' }, min: 0, max: 100, title: { display: true, text: 'Sentiment %', color: '#6e7a88', font: { size: 10, family: 'JetBrains Mono' } } },
+      };
+
+      if (hasSpyData) {
+        scales.y1 = {
+          position: 'right',
+          ticks: { color: '#ffb800', font: { size: 10, family: 'JetBrains Mono' } },
+          grid: { display: false },
+          title: { display: true, text: 'SPY Price', color: '#ffb800', font: { size: 10, family: 'JetBrains Mono' } },
+        };
+      }
+
       historyChartInstance = new Chart(ctx, {
         type: 'line',
-        data: {
-          labels: entries.map(e => e.date),
-          datasets: [
-            {
-              label: 'Bullish %',
-              data: entries.map(e => e.bullishPercent),
-              borderColor: '#00ff87',
-              backgroundColor: 'rgba(0,255,135,0.06)',
-              fill: true,
-              tension: 0.4,
-              borderWidth: 2,
-              pointRadius: 0,
-              pointHoverRadius: 5,
-              pointHoverBackgroundColor: '#00ff87',
-            },
-            {
-              label: 'Bearish %',
-              data: entries.map(e => e.bearishPercent),
-              borderColor: '#ff3b5c',
-              backgroundColor: 'rgba(255,59,92,0.06)',
-              fill: true,
-              tension: 0.4,
-              borderWidth: 2,
-              pointRadius: 0,
-              pointHoverRadius: 5,
-              pointHoverBackgroundColor: '#ff3b5c',
-            }
-          ]
-        },
+        data: { labels: entries.map(e => e.date), datasets },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           interaction: { intersect: false, mode: 'index' },
-          scales: {
-            x: { ticks: { color: '#6e7a88', maxTicksLimit: 12, font: { size: 10, family: 'JetBrains Mono' } }, grid: { color: 'rgba(30,39,50,0.6)' } },
-            y: { ticks: { color: '#6e7a88', font: { size: 10, family: 'JetBrains Mono' } }, grid: { color: 'rgba(30,39,50,0.6)' }, min: 0, max: 100 }
-          },
+          scales,
           plugins: {
             legend: { labels: { color: '#6e7a88', font: { size: 11, family: 'JetBrains Mono' }, usePointStyle: true, pointStyleWidth: 8 } },
             tooltip: {
@@ -672,6 +749,14 @@
               cornerRadius: 8,
               titleFont: { family: 'JetBrains Mono', size: 11 },
               bodyFont: { family: 'JetBrains Mono', size: 11 },
+              callbacks: {
+                label: function(ctx) {
+                  if (ctx.dataset.yAxisID === 'y1') {
+                    return ' SPY: $' + ctx.parsed.y.toFixed(2);
+                  }
+                  return ' ' + ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(1) + '%';
+                }
+              }
             }
           }
         }
@@ -752,9 +837,31 @@
       });
     }
 
+    async function fetchSpyPrice() {
+      try {
+        const res = await fetch('/api/spy/today');
+        const data = await res.json();
+        if (!data.spy) return;
+
+        const strip = document.getElementById('spyStrip');
+        strip.style.display = 'flex';
+
+        document.getElementById('spyPrice').textContent = '$' + data.spy.close.toFixed(2);
+
+        const changeEl = document.getElementById('spyChange');
+        const sign = data.spy.change >= 0 ? '+' : '';
+        changeEl.textContent = sign + data.spy.change.toFixed(2) + ' (' + sign + data.spy.changePercent.toFixed(2) + '%)';
+        changeEl.className = 'spy-change ' + (data.spy.change > 0 ? 'up' : data.spy.change < 0 ? 'down' : 'flat');
+      } catch {
+        /* SPY fetch is non-critical */
+      }
+    }
+
     // Initial fetch + polling
     fetchSentiment();
+    fetchSpyPrice();
     setInterval(fetchSentiment, 30000);
+    setInterval(fetchSpyPrice, 60000);
   </script>
 </body>
 </html>

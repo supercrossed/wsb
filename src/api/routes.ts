@@ -7,6 +7,7 @@ import {
   getCommentCountSince,
   getTopPosts,
 } from "../services/database";
+import { fetchSpyToday } from "../services/spy";
 import { getActiveThreadType } from "../services/reddit";
 import { pollAndAnalyze } from "../services/scheduler";
 import { logger } from "../lib/logger";
@@ -157,6 +158,33 @@ router.get("/api/live-counts", (_req: Request, res: Response) => {
     bearishPercent: total > 0 ? Math.round((counts.bearish / total) * 10000) / 100 : 0,
     neutralPercent: total > 0 ? Math.round((counts.neutral / total) * 10000) / 100 : 0,
   });
+});
+
+/**
+ * GET /api/spy/today
+ * Returns today's SPY price data.
+ */
+router.get("/api/spy/today", async (_req: Request, res: Response) => {
+  try {
+    const spy = await fetchSpyToday();
+    res.json({ spy });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+/**
+ * GET /api/spy/history?days=90
+ * Returns SPY prices from the historical table overlaid with sentiment data.
+ */
+router.get("/api/spy/history", (req: Request, res: Response) => {
+  const days = Math.min(
+    parseInt((req.query.days as string) ?? "90", 10),
+    config.sentiment.historyDays,
+  );
+  const entries = getHistoricalComparison(days);
+  res.json({ days, entries });
 });
 
 export { router };

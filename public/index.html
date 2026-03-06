@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WSB Inverse Sentiment Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --green: #3fb950;
+      --red: #f85149;
+      --yellow: #d29922;
+      --blue: #58a6ff;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 { font-size: 1.4rem; font-weight: 600; }
+    header .status {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    header .status .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      display: inline-block;
+    }
+    nav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      gap: 0;
+    }
+    nav a {
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 12px 16px;
+      font-size: 0.9rem;
+      border-bottom: 2px solid transparent;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    nav a:hover { color: var(--text); }
+    nav a.active {
+      color: var(--text);
+      border-bottom-color: var(--blue);
+    }
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px;
+    }
+    .card h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .recommendation {
+      text-align: center;
+      padding: 32px 24px;
+    }
+    .recommendation .action {
+      font-size: 3rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .recommendation .action.buy { color: var(--green); }
+    .recommendation .action.sell { color: var(--red); }
+    .recommendation .action.hold { color: var(--yellow); }
+    .recommendation .subtitle {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .stat {
+      text-align: center;
+      padding: 12px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.03);
+    }
+    .stat .value { font-size: 1.5rem; font-weight: 700; }
+    .stat .label { font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; }
+    .stat.bullish .value { color: var(--green); }
+    .stat.bearish .value { color: var(--red); }
+    .stat.neutral .value { color: var(--yellow); }
+    .chart-wrap { position: relative; max-width: 300px; margin: 0 auto; }
+    .thread-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .thread-badge.daily { background: rgba(63,185,80,0.15); color: var(--green); }
+    .thread-badge.overnight { background: rgba(88,166,255,0.15); color: var(--blue); }
+    .thread-badge.weekend { background: rgba(210,153,34,0.15); color: var(--yellow); }
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .total-comments { color: var(--text-muted); font-size: 0.85rem; }
+    .page { display: none; }
+    .page.active { display: block; }
+    .history-chart-wrap { height: 350px; }
+    .updated { color: var(--text-muted); font-size: 0.8rem; text-align: center; margin-top: 16px; }
+    .no-data {
+      text-align: center;
+      color: var(--text-muted);
+      padding: 48px 24px;
+      font-size: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>WSB Inverse Tracker</h1>
+    <div class="status">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText">Connecting...</span>
+    </div>
+  </header>
+  <nav>
+    <a href="#" class="active" data-page="dashboard">Dashboard</a>
+    <a href="#" data-page="history">Historical</a>
+  </nav>
+
+  <!-- Dashboard Page -->
+  <div class="page active" id="page-dashboard">
+    <div class="container">
+      <div class="grid">
+        <div class="card">
+          <div class="meta-row">
+            <h2>WSB Sentiment</h2>
+            <span class="thread-badge daily" id="threadBadge">daily</span>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="sentimentPie"></canvas>
+          </div>
+          <div class="stats">
+            <div class="stat bullish">
+              <div class="value" id="bullishPct">--</div>
+              <div class="label">Bullish</div>
+            </div>
+            <div class="stat bearish">
+              <div class="value" id="bearishPct">--</div>
+              <div class="label">Bearish</div>
+            </div>
+            <div class="stat neutral">
+              <div class="value" id="neutralPct">--</div>
+              <div class="label">Neutral</div>
+            </div>
+          </div>
+          <div class="total-comments" style="text-align:center; margin-top:12px;">
+            <span id="totalComments">0</span> comments analyzed
+          </div>
+        </div>
+        <div class="card recommendation">
+          <h2>Inverse Recommendation</h2>
+          <div class="subtitle" style="margin-bottom:24px;">
+            Do the OPPOSITE of what WSB says
+          </div>
+          <div class="action hold" id="recommendation">--</div>
+          <div class="subtitle" id="recExplanation">Waiting for data...</div>
+        </div>
+      </div>
+      <div class="updated" id="lastUpdated"></div>
+    </div>
+  </div>
+
+  <!-- History Page -->
+  <div class="page" id="page-history">
+    <div class="container">
+      <div class="card">
+        <h2>90-Day Sentiment History vs SPY</h2>
+        <div class="history-chart-wrap">
+          <canvas id="historyChart"></canvas>
+        </div>
+      </div>
+      <div class="card" style="margin-top:24px;">
+        <h2>Inverse Strategy Accuracy</h2>
+        <div class="history-chart-wrap">
+          <canvas id="accuracyChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let pieChart = null;
+    let historyChartInstance = null;
+    let accuracyChartInstance = null;
+
+    // Navigation
+    document.querySelectorAll('nav a').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const page = link.dataset.page;
+        document.querySelectorAll('nav a').forEach(l => l.classList.remove('active'));
+        link.classList.add('active');
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById('page-' + page).classList.add('active');
+        if (page === 'history') loadHistory();
+      });
+    });
+
+    async function fetchSentiment() {
+      try {
+        const res = await fetch('/api/sentiment/today');
+        const data = await res.json();
+
+        document.getElementById('statusDot').style.background = '#3fb950';
+        document.getElementById('statusText').textContent = 'Live';
+
+        const badge = document.getElementById('threadBadge');
+        badge.textContent = data.threadType;
+        badge.className = 'thread-badge ' + data.threadType;
+
+        if (!data.sentiment) {
+          document.getElementById('bullishPct').textContent = '--';
+          document.getElementById('bearishPct').textContent = '--';
+          document.getElementById('neutralPct').textContent = '--';
+          document.getElementById('totalComments').textContent = '0';
+          document.getElementById('recommendation').textContent = 'WAITING';
+          document.getElementById('recommendation').className = 'action hold';
+          document.getElementById('recExplanation').textContent = 'No data yet. Waiting for comments...';
+          updatePieChart(0, 0, 0);
+          return;
+        }
+
+        const s = data.sentiment;
+        document.getElementById('bullishPct').textContent = s.bullishPercent.toFixed(1) + '%';
+        document.getElementById('bearishPct').textContent = s.bearishPercent.toFixed(1) + '%';
+        document.getElementById('neutralPct').textContent = s.neutralPercent.toFixed(1) + '%';
+        document.getElementById('totalComments').textContent = s.totalComments.toLocaleString();
+
+        const rec = s.recommendation;
+        const recEl = document.getElementById('recommendation');
+        recEl.textContent = rec;
+        recEl.className = 'action ' + rec.toLowerCase();
+
+        const explanations = {
+          BUY: 'WSB is bearish. Inverse says BUY SPY.',
+          SELL: 'WSB is bullish. Inverse says SELL/SHORT SPY.',
+          HOLD: 'Sentiment is mixed. No strong signal.'
+        };
+        document.getElementById('recExplanation').textContent = explanations[rec];
+
+        updatePieChart(s.bullishPercent, s.bearishPercent, s.neutralPercent);
+        document.getElementById('lastUpdated').textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+      } catch {
+        document.getElementById('statusDot').style.background = '#f85149';
+        document.getElementById('statusText').textContent = 'Error';
+      }
+    }
+
+    function updatePieChart(bullish, bearish, neutral) {
+      const ctx = document.getElementById('sentimentPie').getContext('2d');
+
+      if (pieChart) {
+        pieChart.data.datasets[0].data = [bullish, bearish, neutral];
+        pieChart.update();
+        return;
+      }
+
+      pieChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Bullish', 'Bearish', 'Neutral'],
+          datasets: [{
+            data: [bullish, bearish, neutral],
+            backgroundColor: ['#3fb950', '#f85149', '#d29922'],
+            borderColor: '#161b22',
+            borderWidth: 3,
+          }]
+        },
+        options: {
+          responsive: true,
+          cutout: '60%',
+          plugins: {
+            legend: {
+              display: true,
+              position: 'bottom',
+              labels: { color: '#8b949e', padding: 16, font: { size: 12 } }
+            }
+          }
+        }
+      });
+    }
+
+    async function loadHistory() {
+      try {
+        const [sentRes, histRes] = await Promise.all([
+          fetch('/api/sentiment/history?days=90'),
+          fetch('/api/historical?days=90')
+        ]);
+        const sentData = await sentRes.json();
+        const histData = await histRes.json();
+
+        renderHistoryChart(sentData.entries);
+        renderAccuracyChart(histData.entries);
+      } catch {
+        /* silently fail for now */
+      }
+    }
+
+    function renderHistoryChart(entries) {
+      const ctx = document.getElementById('historyChart').getContext('2d');
+      if (historyChartInstance) historyChartInstance.destroy();
+
+      if (!entries.length) {
+        ctx.canvas.parentElement.innerHTML = '<div class="no-data">No historical data yet. Check back after a few days of data collection.</div>';
+        return;
+      }
+
+      historyChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: entries.map(e => e.date),
+          datasets: [
+            {
+              label: 'Bullish %',
+              data: entries.map(e => e.bullishPercent),
+              borderColor: '#3fb950',
+              backgroundColor: 'rgba(63,185,80,0.1)',
+              fill: true,
+              tension: 0.3,
+            },
+            {
+              label: 'Bearish %',
+              data: entries.map(e => e.bearishPercent),
+              borderColor: '#f85149',
+              backgroundColor: 'rgba(248,81,73,0.1)',
+              fill: true,
+              tension: 0.3,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { ticks: { color: '#8b949e', maxTicksLimit: 15 }, grid: { color: '#21262d' } },
+            y: { ticks: { color: '#8b949e' }, grid: { color: '#21262d' }, min: 0, max: 100 }
+          },
+          plugins: {
+            legend: { labels: { color: '#8b949e' } }
+          }
+        }
+      });
+    }
+
+    function renderAccuracyChart(entries) {
+      const ctx = document.getElementById('accuracyChart').getContext('2d');
+      if (accuracyChartInstance) accuracyChartInstance.destroy();
+
+      const withOutcome = entries.filter(e => e.inverseCorrect !== null);
+
+      if (!withOutcome.length) {
+        ctx.canvas.parentElement.innerHTML = '<div class="no-data">No outcome data yet. SPY price data will populate as trading days pass.</div>';
+        return;
+      }
+
+      let cumCorrect = 0;
+      const accuracyData = withOutcome.map((e, i) => {
+        if (e.inverseCorrect) cumCorrect++;
+        return { date: e.date, accuracy: Math.round((cumCorrect / (i + 1)) * 100) };
+      });
+
+      const spyData = entries.filter(e => e.spyChange !== null);
+
+      accuracyChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: accuracyData.map(d => d.date),
+          datasets: [
+            {
+              label: 'Inverse Accuracy %',
+              data: accuracyData.map(d => d.accuracy),
+              borderColor: '#58a6ff',
+              backgroundColor: 'rgba(88,166,255,0.1)',
+              fill: true,
+              tension: 0.3,
+              yAxisID: 'y',
+            },
+            {
+              label: 'SPY Daily Change %',
+              data: spyData.map(d => d.spyChange),
+              borderColor: '#d29922',
+              tension: 0.3,
+              yAxisID: 'y1',
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { ticks: { color: '#8b949e', maxTicksLimit: 15 }, grid: { color: '#21262d' } },
+            y: { position: 'left', ticks: { color: '#58a6ff' }, grid: { color: '#21262d' }, min: 0, max: 100 },
+            y1: { position: 'right', ticks: { color: '#d29922' }, grid: { display: false } }
+          },
+          plugins: {
+            legend: { labels: { color: '#8b949e' } }
+          }
+        }
+      });
+    }
+
+    // Poll every 30 seconds for live updates
+    fetchSentiment();
+    setInterval(fetchSentiment, 30000);
+  </script>
+</body>
+</html>

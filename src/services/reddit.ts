@@ -1,0 +1,200 @@
+import { config } from "../config";
+import { logger } from "../lib/logger";
+import { AppError } from "../lib/app-error";
+import type { RedditComment, ThreadType } from "../types";
+
+const BASE_URL = "https://www.reddit.com";
+const USER_AGENT = config.reddit.userAgent;
+
+interface RedditListingChild {
+  kind: string;
+  data: {
+    id: string;
+    title?: string;
+    body?: string;
+    author: string;
+    created_utc: number;
+    stickied?: boolean;
+    distinguished?: string | null;
+    replies?: { kind: string; data: { children: RedditListingChild[] } } | "";
+  };
+}
+
+interface RedditListingResponse {
+  kind: string;
+  data: {
+    children: RedditListingChild[];
+    after: string | null;
+  };
+}
+
+async function redditFetch<T>(url: string): Promise<T> {
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": USER_AGENT,
+      Accept: "application/json",
+    },
+  });
+
+  if (!res.ok) {
+    throw new AppError("Reddit API request failed", "REDDIT_HTTP_ERROR", {
+      status: res.status,
+      statusText: res.statusText,
+      url,
+    });
+  }
+
+  return res.json() as Promise<T>;
+}
+
+/**
+ * Determines which thread type should be active based on current EST time.
+ * - "daily": 7:00 AM - 3:59 PM EST weekdays
+ * - "overnight": 4:00 PM - 6:59 AM EST next day weekdays
+ * - "weekend": Friday 4:00 PM - Monday 6:59 AM
+ */
+export function getActiveThreadType(): ThreadType {
+  const now = new Date();
+  const est = new Date(
+    now.toLocaleString("en-US", { timeZone: "America/New_York" }),
+  );
+  const hour = est.getHours();
+  const day = est.getDay(); // 0=Sun, 6=Sat
+
+  // Weekend: Sat all day, Sun all day, Fri after 4pm, Mon before 7am
+  if (day === 0 || day === 6) return "weekend";
+  if (day === 5 && hour >= 16) return "weekend";
+  if (day === 1 && hour < 7) return "weekend";
+
+  // Market hours
+  if (hour >= 7 && hour < 16) return "daily";
+
+  // Overnight
+  return "overnight";
+}
+
+/**
+ * Finds the active WSB discussion thread by fetching hot posts
+ * from the public JSON endpoint.
+ */
+export async function findActiveThread(
+  threadType: ThreadType,
+): Promise<{ id: string; title: string; permalink: string } | null> {
+  const searchQueries: Record<ThreadType, string[]> = {
+    daily: ["daily discussion thread", "what are your moves today"],
+    overnight: ["what are your moves tomorrow"],
+    weekend: ["weekend discussion thread"],
+  };
+
+  const queries = searchQueries[threadType];
+
+  try {
+    const url = `${BASE_URL}/r/${config.reddit.subreddit}/hot.json?limit=15`;
+    const listing = await redditFetch<RedditListingResponse>(url);
+
+    for (const child of listing.data.children) {
+      const post = child.data;
+      const title = (post.title ?? "").toLowerCase();
+
+      for (const query of queries) {
+        if (title.includes(query)) {
+          logger.info("Found active thread", {
+            threadType,
+            title: post.title,
+            id: post.id,
+          });
+          return {
+            id: post.id,
+            title: post.title ?? "",
+            permalink: `${BASE_URL}/r/${config.reddit.subreddit}/comments/${post.id}.json`,
+          };
+        }
+      }
+    }
+
+    logger.warn("No active thread found", { threadType });
+    return null;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new AppError("Failed to find active thread", "REDDIT_SEARCH_FAIL", {
+      threadType,
+      error: message,
+    });
+  }
+}
+
+/**
+ * Fetches comments from a thread using the public JSON endpoint.
+ * Reddit returns comments in a nested tree; we flatten them recursively.
+ */
+export async function fetchThreadComments(
+  thread: { id: string; permalink: string },
+  threadType: ThreadType,
+  sinceUtc: number = 0,
+): Promise<RedditComment[]> {
+  try {
+    // Fetch the thread comments — limit=500 is the max per request
+    const url = `${thread.permalink}?limit=500&sort=new`;
+    const data = await redditFetch<RedditListingResponse[]>(url);
+
+    // Reddit returns [post_listing, comments_listing]
+    if (!data[1]?.data?.children) {
+      logger.warn("No comments in thread response", { threadId: thread.id });
+      return [];
+    }
+
+    const comments: RedditComment[] = [];
+
+    function processComment(child: RedditListingChild): void {
+      const c = child.data;
+
+      // Skip non-comment nodes (e.g. "more" stubs)
+      if (child.kind !== "t1") return;
+
+      // Skip deleted/removed and bots
+      if (!c.body || c.body === "[deleted]" || c.body === "[removed]") return;
+      if (c.author === "AutoModerator" || c.author === "[deleted]") return;
+
+      if (c.created_utc <= sinceUtc) return;
+
+      comments.push({
+        id: c.id,
+        body: c.body,
+        author: c.author,
+        createdUtc: c.created_utc,
+        threadId: thread.id,
+        threadType,
+      });
+
+      // Process nested replies
+      if (
+        c.replies &&
+        typeof c.replies === "object" &&
+        c.replies.data?.children
+      ) {
+        for (const reply of c.replies.data.children) {
+          processComment(reply);
+        }
+      }
+    }
+
+    for (const child of data[1].data.children) {
+      processComment(child);
+    }
+
+    logger.info("Fetched comments", {
+      threadType,
+      count: comments.length,
+      threadId: thread.id,
+    });
+
+    return comments;
+  } catch (err: unknown) {
+    if (err instanceof AppError) throw err;
+    const message = err instanceof Error ? err.message : String(err);
+    throw new AppError("Failed to fetch comments", "REDDIT_FETCH_FAIL", {
+      threadId: thread.id,
+      error: message,
+    });
+  }
+}

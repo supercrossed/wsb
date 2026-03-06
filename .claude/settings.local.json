@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm init -y)",
+      "Bash(npm install express snoowrap node-cron better-sqlite3 chart.js)",
+      "Bash(npm install -D typescript @types/node @types/express @types/better-sqlite3 @types/node-cron eslint prettier ts-node tsx)"
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "modelAliases": {
+    "haiku": "claude-sonnet-4-6"
+  },
+  "defaultModel": "claude-opus-4-6",
+  "subagentModel": "claude-sonnet-4-6",
+  "permissions": {
+    "allow": ["WebFetch", "WebSearch", "Read", "Bash"]
+  }
+}

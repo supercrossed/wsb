@@ -225,8 +225,8 @@ router.get("/api/spy/history", (req: Request, res: Response) => {
  * plus comparison data for the dashboard.
  */
 router.get("/api/cramer", (_req: Request, res: Response) => {
-  const picks = getCramerPicks(7);
-  const index = computeCramerIndex(picks, 7);
+  const picks = getCramerPicks(30);
+  const index = computeCramerIndex(picks, 30);
   res.json(index);
 });
 

@@ -279,15 +279,27 @@ export async function fetchAllCramerPicks(): Promise<CramerPick[]> {
 
 /**
  * Computes the Cramer Index from a set of picks.
- * Considers picks from the last N days.
+ * Only considers today's picks + yesterday's (evening Mad Money = next-day outlook).
  */
-export function computeCramerIndex(picks: CramerPick[], days: number = 7): CramerIndex {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - days);
-  const cutoffStr = cutoff.toISOString().slice(0, 10);
+export function computeCramerIndex(picks: CramerPick[]): CramerIndex {
+  const now = new Date();
+  const est = new Date(
+    now.toLocaleString("en-US", { timeZone: "America/New_York" }),
+  );
+  const year = est.getFullYear();
+  const month = String(est.getMonth() + 1).padStart(2, "0");
+  const day = String(est.getDate()).padStart(2, "0");
+  const today = `${year}-${month}-${day}`;
+
+  const yesterday = new Date(est);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yYear = yesterday.getFullYear();
+  const yMonth = String(yesterday.getMonth() + 1).padStart(2, "0");
+  const yDay = String(yesterday.getDate()).padStart(2, "0");
+  const yesterdayStr = `${yYear}-${yMonth}-${yDay}`;
 
   const recentPicks = picks
-    .filter((p) => p.date >= cutoffStr)
+    .filter((p) => p.date === today || p.date === yesterdayStr)
     .sort((a, b) => b.date.localeCompare(a.date));
 
   const bullishCount = recentPicks.filter((p) => p.direction === "bullish").length;

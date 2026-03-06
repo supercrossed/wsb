@@ -371,9 +371,12 @@
     .spy-price-big {
       font-size: 2rem;
       font-weight: 700;
-      color: var(--text);
       line-height: 1;
+      transition: color 0.3s ease;
     }
+    .spy-price-big.up { color: var(--green); }
+    .spy-price-big.down { color: var(--red); }
+    .spy-price-big.flat { color: var(--text); }
     .spy-daily-change {
       font-size: 0.95rem;
       font-weight: 700;
@@ -935,7 +938,9 @@
         card.style.display = 'block';
 
         const q = data.quote;
-        document.getElementById('spyPrice').textContent = '$' + q.price.toFixed(2);
+        const priceEl = document.getElementById('spyPrice');
+        priceEl.textContent = '$' + q.price.toFixed(2);
+        priceEl.className = 'spy-price-big ' + (q.change > 0 ? 'up' : q.change < 0 ? 'down' : 'flat');
 
         const changeEl = document.getElementById('spyChange');
         const sign = q.change >= 0 ? '+' : '';
@@ -951,63 +956,90 @@
       }
     }
 
-    // SPY scorecard (verdict + streak, every 60s)
+    // SPY scorecard — live intraday verdict (every 10s, combined with SPY realtime)
     let lastVerdictHash = null;
     async function fetchSpyScorecard() {
       try {
-        const res = await fetch('/api/spy/scorecard');
-        const data = await res.json();
+        const [spyRes, sentRes, scorecardRes] = await Promise.all([
+          fetch('/api/spy/realtime'),
+          fetch('/api/sentiment/today'),
+          fetch('/api/spy/scorecard'),
+        ]);
+        const spyData = await spyRes.json();
+        const sentData = await sentRes.json();
+        const scorecardData = await scorecardRes.json();
 
         const verdictEl = document.getElementById('spyVerdictText');
         const subEl = document.getElementById('spyVerdictSub');
-        const outcomes = data.recentOutcomes || [];
 
-        // Build a hash to avoid re-randomizing taglines every refresh
-        const hash = outcomes.map(o => o.date + o.inverseCorrect).join(',');
-        if (hash === lastVerdictHash) return;
-        lastVerdictHash = hash;
+        const q = spyData.quote;
+        const s = sentData.sentiment;
+        const rec = s ? s.recommendation : null;
 
-        if (outcomes.length > 0) {
-          const latest = outcomes[0];
-          const spyUp = latest.spyChange > 0;
+        // Live intraday verdict: compare current WSB sentiment vs SPY direction right now
+        if (q && s && rec && rec !== 'HOLD') {
+          const spyUp = q.change > 0;
           const spyDir = spyUp ? 'up' : 'down';
-          const wsbWas = latest.wsbSentiment;
-          const rec = latest.inverseRecommendation;
+          const spyFlat = Math.abs(q.changePercent) < 0.05;
+          const wsbBullish = s.bullishPercent > s.bearishPercent;
+          const wsbSentiment = wsbBullish ? 'bullish' : 'bearish';
 
-          if (latest.inverseCorrect === true) {
+          // Inverse logic: if WSB bullish → inverse says PUTS (bet on down)
+          // Inverse correct when: WSB bullish + SPY down, or WSB bearish + SPY up
+          const inverseCorrect = wsbBullish ? !spyUp : spyUp;
+
+          // Build hash from sentiment + SPY direction to avoid re-randomizing
+          const hash = wsbSentiment + ':' + spyDir + ':' + (inverseCorrect ? 'W' : 'L');
+          if (hash === lastVerdictHash) return;
+          lastVerdictHash = hash;
+
+          if (spyFlat) {
+            verdictEl.textContent = 'SPY is flat. Even the market doesn\'t know what to do.';
+            verdictEl.className = 'spy-verdict-text no-data';
+            subEl.textContent = 'WSB: ' + wsbSentiment + ' | SPY: ' + q.change.toFixed(2) + ' (' + q.changePercent.toFixed(2) + '%) — too close to call';
+          } else if (inverseCorrect) {
             const verdicts = [
-              'WSB regards were wrong again. You should have done the inverse.',
+              'WSB regards are wrong again. You should have done the inverse.',
               'Inverse wins. The regards never learn.',
-              'WSB said ' + wsbWas + ', SPY went ' + spyDir + '. Classic.',
+              'WSB says ' + wsbSentiment + ', SPY is ' + spyDir + '. Classic.',
               'Once again, inversing WSB prints money.',
               'Regards in shambles. Inverse stays undefeated.',
+              'WSB: "this time it\'s different." Narrator: it wasn\'t.',
+              'Imagine following WSB advice. Couldn\'t be us.',
             ];
             verdictEl.textContent = verdicts[Math.floor(Math.random() * verdicts.length)];
             verdictEl.className = 'spy-verdict-text inverse-right';
-            subEl.textContent = latest.date + ' \u2014 WSB: ' + wsbWas + ' \u2192 Inverse: ' + rec + ' \u2192 SPY: ' + spyDir + ' \u2714';
-          } else if (latest.inverseCorrect === false) {
+            subEl.textContent = 'WSB: ' + wsbSentiment + ' → Inverse: ' + rec + ' → SPY: ' + spyDir + ' ' + q.changePercent.toFixed(2) + '% ✔';
+          } else {
             const verdicts = [
-              'Well... WSB was actually right this time. Even a broken clock.',
+              'Well... WSB is actually right today. Even a broken clock.',
               'The regards got lucky. You should have followed their advice.',
-              'WSB said ' + wsbWas + ' and SPY went ' + spyDir + '. Broken clock moment.',
-              'Inverse failed today. WSB gets a gold star.',
-              'Against all odds, the regards called it.',
+              'WSB says ' + wsbSentiment + ' and SPY is ' + spyDir + '. Broken clock moment.',
+              'Inverse is losing today. WSB gets a gold star.',
+              'Against all odds, the regards are calling it.',
+              'Don\'t get used to it, regards. Inverse will be back.',
             ];
             verdictEl.textContent = verdicts[Math.floor(Math.random() * verdicts.length)];
             verdictEl.className = 'spy-verdict-text inverse-wrong';
-            subEl.textContent = latest.date + ' \u2014 WSB: ' + wsbWas + ' \u2192 Inverse: ' + rec + ' \u2192 SPY: ' + spyDir + ' \u2718';
-          } else {
-            verdictEl.textContent = 'Waiting for today\'s verdict...';
-            verdictEl.className = 'spy-verdict-text no-data';
-            subEl.textContent = 'Accuracy is computed after market close.';
+            subEl.textContent = 'WSB: ' + wsbSentiment + ' → Inverse: ' + rec + ' → SPY: ' + spyDir + ' ' + q.changePercent.toFixed(2) + '% ✘';
           }
-        } else {
-          verdictEl.textContent = 'No scorecard data yet. Check back after the first full trading day.';
+        } else if (q && s && rec === 'HOLD') {
+          const hash = 'hold:' + (q.change > 0 ? 'up' : 'down');
+          if (hash === lastVerdictHash) return;
+          lastVerdictHash = hash;
+          verdictEl.textContent = 'WSB sentiment is mixed. Even the regards can\'t agree.';
           verdictEl.className = 'spy-verdict-text no-data';
-          subEl.textContent = '';
+          subEl.textContent = 'No strong signal — SPY ' + (q.change >= 0 ? '+' : '') + q.changePercent.toFixed(2) + '% today';
+        } else {
+          if (lastVerdictHash === 'waiting') return;
+          lastVerdictHash = 'waiting';
+          verdictEl.textContent = 'Waiting for sentiment data...';
+          verdictEl.className = 'spy-verdict-text no-data';
+          subEl.textContent = 'Scorecard updates once comments are analyzed.';
         }
 
-        // Streak dots (last 5 days, most recent first)
+        // Streak dots from historical data (last 5 completed days)
+        const outcomes = scorecardData.recentOutcomes || [];
         const streakContainer = document.getElementById('spyStreak');
         streakContainer.innerHTML = '<span class="spy-streak-label">Last 5:</span>';
         const streakDays = outcomes.slice(0, 5);
@@ -1044,8 +1076,8 @@
     fetchSpyRealtime();
     fetchSpyScorecard();
     setInterval(fetchSentiment, 30000);
-    setInterval(fetchSpyRealtime, 10000);
-    setInterval(fetchSpyScorecard, 60000);
+    setInterval(fetchSpyRealtime, 5000);
+    setInterval(fetchSpyScorecard, 10000);
   </script>
 </body>
 </html>

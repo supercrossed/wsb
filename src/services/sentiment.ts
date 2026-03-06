@@ -248,8 +248,8 @@ export function getInverseRecommendation(
   // Inverse WSB: if WSB is bullish, we buy puts. If bearish, we buy calls.
   const spread = Math.abs(bullishPercent - bearishPercent);
 
-  // Need at least 10% spread to make a directional call
-  if (spread < 10) return "HOLD";
+  // Need at least 5% spread to make a directional call
+  if (spread < 5) return "HOLD";
 
   if (bullishPercent > bearishPercent) return "PUTS";
   return "CALLS";

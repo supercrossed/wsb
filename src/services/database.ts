@@ -264,10 +264,11 @@ export function saveHistoricalEntry(
   inverseRecommendation: string,
 ): void {
   const stmt = getDb().prepare(`
-    INSERT OR IGNORE INTO historical (date, wsb_sentiment, inverse_recommendation)
+    INSERT INTO historical (date, wsb_sentiment, inverse_recommendation)
     VALUES (?, ?, ?)
+    ON CONFLICT(date) DO UPDATE SET wsb_sentiment = ?, inverse_recommendation = ?
   `);
-  stmt.run(date, wsbSentiment, inverseRecommendation);
+  stmt.run(date, wsbSentiment, inverseRecommendation, wsbSentiment, inverseRecommendation);
 }
 
 export function updateSpyPrices(
@@ -313,6 +314,17 @@ export function bulkUpsertSpyPrices(
     }
   });
   transaction();
+
+  // Recompute inverse_correct for all rows that have both a real recommendation and SPY data
+  getDb().prepare(`
+    UPDATE historical SET inverse_correct = CASE
+      WHEN inverse_recommendation = 'CALLS' AND spy_change > 0 THEN 1
+      WHEN inverse_recommendation = 'PUTS' AND spy_change < 0 THEN 1
+      WHEN inverse_recommendation IN ('CALLS', 'PUTS') AND spy_change != 0 THEN 0
+      ELSE NULL
+    END
+    WHERE spy_change IS NOT NULL AND inverse_recommendation != 'HOLD' AND wsb_sentiment != 'unknown'
+  `).run();
 }
 
 export function purgeOldData(): void {

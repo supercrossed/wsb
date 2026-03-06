@@ -228,6 +228,98 @@
       line-height: 1.5;
     }
 
+    /* Cramer Index Card */
+    .cramer-card {
+      text-align: center;
+      padding: 28px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .cramer-card::after {
+      content: '';
+      position: absolute;
+      top: -40px;
+      right: -40px;
+      width: 120px;
+      height: 120px;
+      background: radial-gradient(circle, rgba(255,184,0,0.08), transparent 70%);
+      border-radius: 50%;
+    }
+    .cramer-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+    .cramer-action {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 3.5rem;
+      font-weight: 700;
+      margin: 12px 0 8px;
+      line-height: 1;
+      position: relative;
+    }
+    .cramer-action.calls {
+      color: var(--green);
+      text-shadow: 0 0 40px rgba(0,255,135,0.25);
+    }
+    .cramer-action.puts {
+      color: var(--red);
+      text-shadow: 0 0 40px rgba(255,59,92,0.25);
+    }
+    .cramer-action.hold {
+      color: var(--yellow);
+      text-shadow: 0 0 40px rgba(255,184,0,0.25);
+    }
+    .cramer-tagline {
+      font-size: 0.88rem;
+      font-weight: 600;
+      font-style: italic;
+      margin-bottom: 12px;
+      min-height: 1.4em;
+    }
+    .cramer-tagline.agree { color: var(--yellow); }
+    .cramer-tagline.disagree { color: var(--text); }
+    .cramer-comparison {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-top: 8px;
+      line-height: 1.5;
+      max-width: 300px;
+    }
+    .cramer-picks-summary {
+      display: flex;
+      gap: 16px;
+      margin-top: 12px;
+      font-size: 0.82rem;
+    }
+    .cramer-picks-summary .bulls { color: var(--green); font-weight: 600; }
+    .cramer-picks-summary .bears { color: var(--red); font-weight: 600; }
+    .cramer-picks-summary .neutrals { color: var(--text-muted); font-weight: 600; }
+    .cramer-recent {
+      margin-top: 14px;
+      width: 100%;
+      max-height: 120px;
+      overflow-y: auto;
+      font-size: 0.75rem;
+      text-align: left;
+    }
+    .cramer-pick-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 3px 0;
+      border-bottom: 1px solid rgba(30,39,50,0.4);
+    }
+    .cramer-pick-ticker { color: var(--accent); font-weight: 700; }
+    .cramer-pick-dir.bullish { color: var(--green); }
+    .cramer-pick-dir.bearish { color: var(--red); }
+    .cramer-pick-dir.neutral { color: var(--text-muted); }
+
     /* Sentiment bar */
     .sentiment-bar-wrap {
       margin-top: 24px;
@@ -513,6 +605,20 @@
           <div class="rec-tagline hold" id="recTagline">&nbsp;</div>
           <div class="action hold" id="recommendation">--</div>
           <div class="rec-explanation" id="recExplanation">Waiting for data...</div>
+        </div>
+
+        <!-- Cramer Index Card -->
+        <div class="card cramer-card" id="cramerCard" style="display:none;">
+          <div class="cramer-label">Cramer Index (7-day)</div>
+          <div class="cramer-action hold" id="cramerAction">--</div>
+          <div class="cramer-tagline" id="cramerTagline">&nbsp;</div>
+          <div class="cramer-picks-summary">
+            <span class="bulls" id="cramerBulls">0 bullish</span>
+            <span class="bears" id="cramerBears">0 bearish</span>
+            <span class="neutrals" id="cramerNeutrals">0 neutral</span>
+          </div>
+          <div class="cramer-comparison" id="cramerComparison"></div>
+          <div class="cramer-recent" id="cramerRecent"></div>
         </div>
       </div>
       <!-- SPY Scorecard -->
@@ -1083,13 +1189,112 @@
       }
     }
 
+    // Cramer Index (every 5 min — data only updates every 2 hours server-side)
+    let lastCramerHash = null;
+    async function fetchCramerIndex() {
+      try {
+        const [cramerRes, sentRes] = await Promise.all([
+          fetch('/api/cramer'),
+          fetch('/api/sentiment/today'),
+        ]);
+        const cramer = await cramerRes.json();
+        const sentData = await sentRes.json();
+        const s = sentData.sentiment;
+
+        if (!cramer || cramer.totalPicks === 0) return;
+
+        const card = document.getElementById('cramerCard');
+        card.style.display = 'flex';
+
+        // Hash to avoid re-randomizing taglines
+        const hash = cramer.recommendation + ':' + cramer.totalPicks + ':' + (s ? s.recommendation : '');
+        if (hash === lastCramerHash) return;
+        lastCramerHash = hash;
+
+        const actionEl = document.getElementById('cramerAction');
+        actionEl.textContent = cramer.recommendation;
+        actionEl.className = 'cramer-action ' + cramer.recommendation.toLowerCase();
+
+        document.getElementById('cramerBulls').textContent = cramer.bullishCount + ' bullish';
+        document.getElementById('cramerBears').textContent = cramer.bearishCount + ' bearish';
+        document.getElementById('cramerNeutrals').textContent = cramer.neutralCount + ' neutral';
+
+        // WSB vs Cramer comparison
+        const taglineEl = document.getElementById('cramerTagline');
+        const compEl = document.getElementById('cramerComparison');
+        const wsbRec = s ? s.recommendation : null;
+        const cramerDir = cramer.overallDirection;
+        const wsbBullish = s ? s.bullishPercent > s.bearishPercent : null;
+        const wsbDir = wsbBullish === null ? null : (wsbBullish ? 'bullish' : 'bearish');
+
+        if (wsbRec && wsbDir) {
+          const agree = (cramerDir === 'bullish' && wsbBullish) || (cramerDir === 'bearish' && !wsbBullish);
+
+          if (agree) {
+            const taglines = [
+              'Cramer and WSB agree. This can\'t end well.',
+              'When Cramer and the regards align, run.',
+              'Two wrongs don\'t make a right. Cramer + WSB = max danger.',
+              'Cramer and WSB on the same page? Inverse HARDER.',
+              'Broken clocks synchronized. Panic.',
+            ];
+            taglineEl.textContent = taglines[Math.floor(Math.random() * taglines.length)];
+            taglineEl.className = 'cramer-tagline agree';
+            compEl.textContent = 'Both Cramer (' + cramerDir + ') and WSB (' + wsbDir + ') are aligned. Historically, this is a strong inverse signal.';
+          } else {
+            if (cramerDir === 'neutral') {
+              const taglines = [
+                'Cramer is on the fence. WSB has no such luxury.',
+                'Even Cramer can\'t pick a side today.',
+              ];
+              taglineEl.textContent = taglines[Math.floor(Math.random() * taglines.length)];
+              taglineEl.className = 'cramer-tagline disagree';
+              compEl.textContent = 'Cramer is mixed while WSB leans ' + wsbDir + '. The regards at least committed.';
+            } else {
+              const taglines = [
+                'Cramer and WSB disagree. One of them is right (probably neither).',
+                'Cramer says ' + cramerDir + ', WSB says ' + wsbDir + '. Choose your fighter.',
+                'The unstoppable force of Cramer vs the immovable object of WSB.',
+                'Cramer vs the regards. Place your bets.',
+                'Cramer: ' + cramerDir + '. WSB: ' + wsbDir + '. Markets: confused.',
+              ];
+              taglineEl.textContent = taglines[Math.floor(Math.random() * taglines.length)];
+              taglineEl.className = 'cramer-tagline disagree';
+              compEl.textContent = 'Cramer leans ' + cramerDir + ' while WSB leans ' + wsbDir + '. When they disagree, follow the inverse of whoever has the worse track record.';
+            }
+          }
+        } else {
+          taglineEl.textContent = 'Cramer has spoken.';
+          taglineEl.className = 'cramer-tagline disagree';
+          compEl.textContent = 'Waiting for WSB sentiment data to compare.';
+        }
+
+        // Recent picks list
+        const recentEl = document.getElementById('cramerRecent');
+        recentEl.innerHTML = '';
+        const picks = cramer.recentPicks || [];
+        for (const pick of picks.slice(0, 10)) {
+          const row = document.createElement('div');
+          row.className = 'cramer-pick-row';
+          row.innerHTML = '<span class="cramer-pick-ticker">' + pick.ticker + '</span>' +
+            '<span class="cramer-pick-dir ' + pick.direction + '">' + pick.rawDirection + '</span>' +
+            '<span style="color:var(--text-muted)">' + pick.date + '</span>';
+          recentEl.appendChild(row);
+        }
+      } catch (err) {
+        console.warn('Cramer fetch failed:', err);
+      }
+    }
+
     // Initial fetch + polling
     fetchSentiment();
     fetchSpyRealtime();
     fetchSpyScorecard();
+    fetchCramerIndex();
     setInterval(fetchSentiment, 30000);
     setInterval(fetchSpyRealtime, 5000);
     setInterval(fetchSpyScorecard, 10000);
+    setInterval(fetchCramerIndex, 300000);
   </script>
 </body>
 </html>

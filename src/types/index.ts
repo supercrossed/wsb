@@ -62,6 +62,28 @@ export interface TopPost {
   tickers: string[];
 }
 
+// Cramer types
+export interface CramerPick {
+  ticker: string;
+  direction: "bullish" | "bearish" | "neutral";
+  rawDirection: string;
+  date: string;
+  source: "cnbc_rss" | "quiverquant";
+  title: string;
+}
+
+export interface CramerIndex {
+  bullishCount: number;
+  bearishCount: number;
+  neutralCount: number;
+  totalPicks: number;
+  bullishPercent: number;
+  bearishPercent: number;
+  overallDirection: "bullish" | "bearish" | "neutral";
+  recommendation: "CALLS" | "PUTS" | "HOLD";
+  recentPicks: CramerPick[];
+}
+
 // Future trade bot types
 export interface TradeAccount {
   name: "wsb" | "inverse";

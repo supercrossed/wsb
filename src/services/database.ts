@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs";
 
 import { logger } from "../lib/logger";
-import type { CommentSentiment, DailySentiment, HistoricalEntry, ThreadType, TopPost } from "../types";
+import type { CommentSentiment, CramerPick, DailySentiment, HistoricalEntry, ThreadType, TopPost } from "../types";
 
 let db: Database.Database;
 
@@ -75,6 +75,19 @@ export function initDatabase(dbPath: string): Database.Database {
       spy_change REAL,
       inverse_correct INTEGER
     );
+
+    CREATE TABLE IF NOT EXISTS cramer_picks (
+      ticker TEXT NOT NULL,
+      date TEXT NOT NULL,
+      direction TEXT NOT NULL,
+      raw_direction TEXT NOT NULL,
+      source TEXT NOT NULL,
+      title TEXT NOT NULL,
+      fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (ticker, date, source)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_cramer_picks_date ON cramer_picks(date);
   `);
 
   logger.info("Database initialized", { path: dbPath });
@@ -368,5 +381,69 @@ export function purgeOldData(): void {
     getDb().pragma("optimize");
   }
 
+  // cramer_picks: keep 30 days
+  getDb().prepare("DELETE FROM cramer_picks WHERE date < date('now', '-30 days')").run();
+
   logger.info("Purged old data", { commentsDeleted: commentResult.changes });
+}
+
+export function saveCramerPick(pick: CramerPick): void {
+  const stmt = getDb().prepare(`
+    INSERT INTO cramer_picks (ticker, date, direction, raw_direction, source, title)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(ticker, date, source) DO UPDATE SET direction = ?, raw_direction = ?, title = ?
+  `);
+  stmt.run(
+    pick.ticker,
+    pick.date,
+    pick.direction,
+    pick.rawDirection,
+    pick.source,
+    pick.title,
+    pick.direction,
+    pick.rawDirection,
+    pick.title,
+  );
+}
+
+export function saveCramerPicks(picks: CramerPick[]): void {
+  const stmt = getDb().prepare(`
+    INSERT INTO cramer_picks (ticker, date, direction, raw_direction, source, title)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(ticker, date, source) DO UPDATE SET direction = ?, raw_direction = ?, title = ?
+  `);
+
+  const transaction = getDb().transaction(() => {
+    for (const pick of picks) {
+      stmt.run(
+        pick.ticker,
+        pick.date,
+        pick.direction,
+        pick.rawDirection,
+        pick.source,
+        pick.title,
+        pick.direction,
+        pick.rawDirection,
+        pick.title,
+      );
+    }
+  });
+  transaction();
+}
+
+export function getCramerPicks(days: number = 7): CramerPick[] {
+  const rows = getDb()
+    .prepare(
+      "SELECT * FROM cramer_picks WHERE date >= date('now', ? || ' days') ORDER BY date DESC",
+    )
+    .all(`-${days}`) as Record<string, unknown>[];
+
+  return rows.map((row) => ({
+    ticker: row.ticker as string,
+    direction: row.direction as CramerPick["direction"],
+    rawDirection: row.raw_direction as string,
+    date: row.date as string,
+    source: row.source as CramerPick["source"],
+    title: row.title as string,
+  }));
 }

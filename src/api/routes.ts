@@ -7,9 +7,11 @@ import {
   getCommentCountSince,
   getTopPosts,
   getRecentOutcomes,
+  getCramerPicks,
 } from "../services/database";
 import { fetchSpyToday, fetchSpyRealtime } from "../services/spy";
 import { getActiveThreadType } from "../services/reddit";
+import { computeCramerIndex } from "../services/cramer";
 import { pollAndAnalyze } from "../services/scheduler";
 import { logger } from "../lib/logger";
 import { config } from "../config";
@@ -215,6 +217,17 @@ router.get("/api/spy/history", (req: Request, res: Response) => {
   );
   const entries = getHistoricalComparison(days);
   res.json({ days, entries });
+});
+
+/**
+ * GET /api/cramer
+ * Returns the Cramer Index — his recent picks aggregated into bull/bear direction,
+ * plus comparison data for the dashboard.
+ */
+router.get("/api/cramer", (_req: Request, res: Response) => {
+  const picks = getCramerPicks(7);
+  const index = computeCramerIndex(picks, 7);
+  res.json(index);
 });
 
 export { router };

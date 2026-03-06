@@ -16,10 +16,12 @@ import {
   saveTopPost,
   saveHistoricalEntry,
   bulkUpsertSpyPrices,
+  saveCramerPicks,
   getCommentCountSince,
   purgeOldData,
 } from "./database";
 import { fetchSpyPrices } from "./spy";
+import { fetchAllCramerPicks } from "./cramer";
 import type { DailySentiment, ThreadType, TopPost } from "../types";
 
 let isPolling = false;
@@ -231,6 +233,21 @@ export function startScheduler(): void {
     { timezone: "America/New_York" },
   );
 
+  // Fetch Cramer picks on startup + every 2 hours
+  fetchCramerData();
+  setInterval(() => {
+    fetchCramerData();
+  }, 2 * 60 * 60 * 1000);
+
+  // Also fetch Cramer picks at 8 PM EST (after Mad Money airs at 6 PM)
+  cron.schedule(
+    "0 20 * * 1-5",
+    () => {
+      fetchCramerData();
+    },
+    { timezone: "America/New_York" },
+  );
+
   // Daily cleanup: purge old comments at midnight EST
   cron.schedule(
     "0 0 * * *",
@@ -241,6 +258,22 @@ export function startScheduler(): void {
   );
 
   logger.info("Scheduler started");
+}
+
+/**
+ * Fetches Cramer picks from CNBC RSS + QuiverQuant and saves to DB.
+ */
+async function fetchCramerData(): Promise<void> {
+  try {
+    const picks = await fetchAllCramerPicks();
+    if (picks.length > 0) {
+      saveCramerPicks(picks);
+      logger.info("Cramer picks saved", { count: picks.length });
+    }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn("Cramer fetch failed", { error: message });
+  }
 }
 
 /**

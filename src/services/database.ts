@@ -201,6 +201,26 @@ export function getHistoricalComparison(days: number): HistoricalEntry[] {
   }));
 }
 
+export function getRecentOutcomes(limit: number = 5): HistoricalEntry[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT * FROM historical
+       WHERE wsb_sentiment != 'unknown' AND spy_change IS NOT NULL
+       ORDER BY date DESC LIMIT ?`,
+    )
+    .all(limit) as Record<string, unknown>[];
+
+  return rows.map((row) => ({
+    date: row.date as string,
+    wsbSentiment: row.wsb_sentiment as "bullish" | "bearish",
+    inverseRecommendation: row.inverse_recommendation as "BUY" | "SELL",
+    spyOpen: row.spy_open as number | null,
+    spyClose: row.spy_close as number | null,
+    spyChange: row.spy_change as number | null,
+    inverseCorrect: row.inverse_correct === null ? null : Boolean(row.inverse_correct),
+  }));
+}
+
 export function getCommentCountSince(sinceUtc: number, threadType?: ThreadType): { bullish: number; bearish: number; neutral: number } {
   const query = threadType
     ? "SELECT sentiment, COUNT(*) as count FROM comments WHERE created_utc >= ? AND thread_type = ? GROUP BY sentiment"

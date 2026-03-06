@@ -346,36 +346,110 @@
       font-size: 0.9rem;
     }
 
-    /* SPY ticker strip */
-    .spy-strip {
+    /* SPY scorecard card */
+    .spy-card {
+      margin-top: 20px;
+    }
+    .spy-header {
       display: flex;
       align-items: center;
-      gap: 12px;
-      justify-content: center;
-      padding: 10px 0 0;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .spy-price-row {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
       font-family: 'JetBrains Mono', monospace;
     }
-    .spy-strip .spy-label {
-      font-size: 0.7rem;
+    .spy-ticker {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      letter-spacing: 0.06em;
+    }
+    .spy-price-big {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1;
+    }
+    .spy-daily-change {
+      font-size: 0.95rem;
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: 6px;
+    }
+    .spy-daily-change.up { color: var(--green); background: var(--green-dim); }
+    .spy-daily-change.down { color: var(--red); background: var(--red-dim); }
+    .spy-daily-change.flat { color: var(--yellow); background: var(--yellow-dim); }
+
+    .spy-market-state {
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .spy-market-state.regular { background: var(--green-dim); color: var(--green); }
+    .spy-market-state.pre { background: var(--yellow-dim); color: var(--yellow); }
+    .spy-market-state.post { background: var(--blue-dim); color: var(--blue); }
+    .spy-market-state.closed { background: rgba(110,122,136,0.1); color: var(--text-muted); }
+
+    .spy-verdict {
+      margin-top: 16px;
+      padding: 16px 20px;
+      border-radius: 12px;
+      background: var(--surface-raised);
+      border: 1px solid var(--border);
+    }
+    .spy-verdict-text {
+      font-size: 1rem;
+      font-weight: 700;
+      font-style: italic;
+      line-height: 1.5;
+    }
+    .spy-verdict-text.inverse-right { color: var(--green); }
+    .spy-verdict-text.inverse-wrong { color: var(--red); }
+    .spy-verdict-text.no-data { color: var(--text-muted); }
+    .spy-verdict-sub {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 6px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .spy-streak {
+      display: flex;
+      gap: 6px;
+      margin-top: 14px;
+      align-items: center;
+    }
+    .spy-streak-label {
+      font-size: 0.68rem;
       font-weight: 700;
       color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.08em;
+      font-family: 'JetBrains Mono', monospace;
+      margin-right: 4px;
     }
-    .spy-strip .spy-price {
-      font-size: 1.1rem;
+    .spy-streak-dot {
+      width: 22px;
+      height: 22px;
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.65rem;
       font-weight: 700;
-      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
     }
-    .spy-strip .spy-change {
-      font-size: 0.85rem;
-      font-weight: 700;
-      padding: 3px 10px;
-      border-radius: 6px;
-    }
-    .spy-strip .spy-change.up { color: var(--green); background: var(--green-dim); }
-    .spy-strip .spy-change.down { color: var(--red); background: var(--red-dim); }
-    .spy-strip .spy-change.flat { color: var(--yellow); background: var(--yellow-dim); }
+    .spy-streak-dot.win { background: var(--green-dim); color: var(--green); }
+    .spy-streak-dot.loss { background: var(--red-dim); color: var(--red); }
+    .spy-streak-dot.na { background: rgba(110,122,136,0.1); color: var(--text-muted); }
   </style>
 </head>
 <body>
@@ -436,10 +510,23 @@
           <div class="rec-explanation" id="recExplanation">Waiting for data...</div>
         </div>
       </div>
-      <div class="spy-strip" id="spyStrip" style="display:none;">
-        <span class="spy-label">SPY</span>
-        <span class="spy-price" id="spyPrice">--</span>
-        <span class="spy-change flat" id="spyChange">--</span>
+      <!-- SPY Scorecard -->
+      <div class="card spy-card" id="spyCard" style="display:none;">
+        <div class="spy-header">
+          <div class="spy-price-row">
+            <span class="spy-ticker">SPY</span>
+            <span class="spy-price-big" id="spyPrice">--</span>
+            <span class="spy-daily-change flat" id="spyChange">--</span>
+            <span class="spy-market-state closed" id="spyMarketState">CLOSED</span>
+          </div>
+        </div>
+        <div class="spy-verdict" id="spyVerdict">
+          <div class="spy-verdict-text no-data" id="spyVerdictText">Loading scorecard...</div>
+          <div class="spy-verdict-sub" id="spyVerdictSub"></div>
+        </div>
+        <div class="spy-streak" id="spyStreak">
+          <span class="spy-streak-label">Last 5:</span>
+        </div>
       </div>
       <div class="updated" id="lastUpdated"></div>
     </div>
@@ -837,31 +924,128 @@
       });
     }
 
-    async function fetchSpyPrice() {
+    // Real-time SPY price (every 10s)
+    async function fetchSpyRealtime() {
       try {
-        const res = await fetch('/api/spy/today');
+        const res = await fetch('/api/spy/realtime');
         const data = await res.json();
-        if (!data.spy) return;
+        if (!data.quote) return;
 
-        const strip = document.getElementById('spyStrip');
-        strip.style.display = 'flex';
+        const card = document.getElementById('spyCard');
+        card.style.display = 'block';
 
-        document.getElementById('spyPrice').textContent = '$' + data.spy.close.toFixed(2);
+        const q = data.quote;
+        document.getElementById('spyPrice').textContent = '$' + q.price.toFixed(2);
 
         const changeEl = document.getElementById('spyChange');
-        const sign = data.spy.change >= 0 ? '+' : '';
-        changeEl.textContent = sign + data.spy.change.toFixed(2) + ' (' + sign + data.spy.changePercent.toFixed(2) + '%)';
-        changeEl.className = 'spy-change ' + (data.spy.change > 0 ? 'up' : data.spy.change < 0 ? 'down' : 'flat');
+        const sign = q.change >= 0 ? '+' : '';
+        changeEl.textContent = sign + q.change.toFixed(2) + ' (' + sign + q.changePercent.toFixed(2) + '%)';
+        changeEl.className = 'spy-daily-change ' + (q.change > 0 ? 'up' : q.change < 0 ? 'down' : 'flat');
+
+        const stateEl = document.getElementById('spyMarketState');
+        const stateLabels = { regular: 'MARKET OPEN', pre: 'PRE-MARKET', post: 'AFTER HOURS', closed: 'CLOSED' };
+        stateEl.textContent = stateLabels[q.marketState] || 'CLOSED';
+        stateEl.className = 'spy-market-state ' + (q.marketState || 'closed');
       } catch {
-        /* SPY fetch is non-critical */
+        /* non-critical */
+      }
+    }
+
+    // SPY scorecard (verdict + streak, every 60s)
+    let lastVerdictHash = '';
+    async function fetchSpyScorecard() {
+      try {
+        const res = await fetch('/api/spy/scorecard');
+        const data = await res.json();
+
+        const verdictEl = document.getElementById('spyVerdictText');
+        const subEl = document.getElementById('spyVerdictSub');
+        const outcomes = data.recentOutcomes || [];
+
+        // Build a hash to avoid re-randomizing taglines every refresh
+        const hash = outcomes.map(o => o.date + o.inverseCorrect).join(',');
+        if (hash === lastVerdictHash) return;
+        lastVerdictHash = hash;
+
+        if (outcomes.length > 0) {
+          const latest = outcomes[0];
+          const spyUp = latest.spyChange > 0;
+          const spyDir = spyUp ? 'up' : 'down';
+          const wsbWas = latest.wsbSentiment;
+          const rec = latest.inverseRecommendation;
+
+          if (latest.inverseCorrect === true) {
+            const verdicts = [
+              'WSB regards were wrong again. You should have done the inverse.',
+              'Inverse wins. The regards never learn.',
+              'WSB said ' + wsbWas + ', SPY went ' + spyDir + '. Classic.',
+              'Once again, inversing WSB prints money.',
+              'Regards in shambles. Inverse stays undefeated.',
+            ];
+            verdictEl.textContent = verdicts[Math.floor(Math.random() * verdicts.length)];
+            verdictEl.className = 'spy-verdict-text inverse-right';
+            subEl.textContent = latest.date + ' \u2014 WSB: ' + wsbWas + ' \u2192 Inverse: ' + rec + ' \u2192 SPY: ' + spyDir + ' \u2714';
+          } else if (latest.inverseCorrect === false) {
+            const verdicts = [
+              'Well... WSB was actually right this time. Even a broken clock.',
+              'The regards got lucky. You should have followed their advice.',
+              'WSB said ' + wsbWas + ' and SPY went ' + spyDir + '. Broken clock moment.',
+              'Inverse failed today. WSB gets a gold star.',
+              'Against all odds, the regards called it.',
+            ];
+            verdictEl.textContent = verdicts[Math.floor(Math.random() * verdicts.length)];
+            verdictEl.className = 'spy-verdict-text inverse-wrong';
+            subEl.textContent = latest.date + ' \u2014 WSB: ' + wsbWas + ' \u2192 Inverse: ' + rec + ' \u2192 SPY: ' + spyDir + ' \u2718';
+          } else {
+            verdictEl.textContent = 'Waiting for today\'s verdict...';
+            verdictEl.className = 'spy-verdict-text no-data';
+            subEl.textContent = 'Accuracy is computed after market close.';
+          }
+        } else {
+          verdictEl.textContent = 'No scorecard data yet. Check back after the first full trading day.';
+          verdictEl.className = 'spy-verdict-text no-data';
+          subEl.textContent = '';
+        }
+
+        // Streak dots (last 5 days, most recent first)
+        const streakContainer = document.getElementById('spyStreak');
+        streakContainer.innerHTML = '<span class="spy-streak-label">Last 5:</span>';
+        const streakDays = outcomes.slice(0, 5);
+        for (const day of streakDays) {
+          const dot = document.createElement('div');
+          if (day.inverseCorrect === true) {
+            dot.className = 'spy-streak-dot win';
+            dot.textContent = 'W';
+            dot.title = day.date + ': Inverse correct';
+          } else if (day.inverseCorrect === false) {
+            dot.className = 'spy-streak-dot loss';
+            dot.textContent = 'L';
+            dot.title = day.date + ': Inverse wrong';
+          } else {
+            dot.className = 'spy-streak-dot na';
+            dot.textContent = '-';
+            dot.title = day.date + ': No outcome';
+          }
+          streakContainer.appendChild(dot);
+        }
+        for (let i = streakDays.length; i < 5; i++) {
+          const dot = document.createElement('div');
+          dot.className = 'spy-streak-dot na';
+          dot.textContent = '-';
+          streakContainer.appendChild(dot);
+        }
+      } catch {
+        /* non-critical */
       }
     }
 
     // Initial fetch + polling
     fetchSentiment();
-    fetchSpyPrice();
+    fetchSpyRealtime();
+    fetchSpyScorecard();
     setInterval(fetchSentiment, 30000);
-    setInterval(fetchSpyPrice, 60000);
+    setInterval(fetchSpyRealtime, 10000);
+    setInterval(fetchSpyScorecard, 60000);
   </script>
 </body>
 </html>

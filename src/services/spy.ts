@@ -75,6 +75,110 @@ export async function fetchSpyPrices(days: number = 90): Promise<SpyDailyPrice[]
   return prices;
 }
 
+interface SpyRealtimeQuote {
+  price: number;
+  previousClose: number;
+  change: number;
+  changePercent: number;
+  marketState: string;
+  updatedAt: number;
+}
+
+interface YahooMeta {
+  regularMarketPrice: number;
+  previousClose: number;
+  chartPreviousClose: number;
+  currentTradingPeriod?: {
+    pre?: { start: number; end: number };
+    regular?: { start: number; end: number };
+    post?: { start: number; end: number };
+  };
+}
+
+interface YahooChartResult {
+  meta: YahooMeta;
+  timestamp?: number[];
+  indicators?: {
+    quote: Array<{
+      open: number[];
+      close: number[];
+      high: number[];
+      low: number[];
+      volume: number[];
+    }>;
+  };
+}
+
+// Cache real-time quote for 10 seconds to avoid excessive API calls
+let realtimeCache: { data: SpyRealtimeQuote; fetchedAt: number } | null = null;
+const REALTIME_CACHE_MS = 10_000;
+
+/**
+ * Fetches the current SPY price in near-real-time (includes pre/post market).
+ * Uses Yahoo Finance's quote endpoint which returns the latest trade price
+ * regardless of market session.
+ */
+export async function fetchSpyRealtime(): Promise<SpyRealtimeQuote | null> {
+  if (realtimeCache && Date.now() - realtimeCache.fetchedAt < REALTIME_CACHE_MS) {
+    return realtimeCache.data;
+  }
+
+  try {
+    const url = "https://query1.finance.yahoo.com/v8/finance/chart/SPY?range=1d&interval=1m&includePrePost=true";
+
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; wsb-sentiment-bot/1.0)",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Yahoo Finance API returned ${response.status}: ${response.statusText}`);
+    }
+
+    const data = (await response.json()) as { chart?: { result?: YahooChartResult[] } };
+    const result = data?.chart?.result?.[0];
+
+    if (!result?.meta) {
+      throw new Error("Unexpected Yahoo Finance response structure");
+    }
+
+    const { meta } = result;
+    const currentPrice = meta.regularMarketPrice;
+    const previousClose = meta.previousClose ?? meta.chartPreviousClose;
+    const change = Math.round((currentPrice - previousClose) * 100) / 100;
+    const changePercent = Math.round((change / previousClose) * 10000) / 100;
+
+    // Determine market state from trading periods
+    const now = Math.floor(Date.now() / 1000);
+    const periods = meta.currentTradingPeriod;
+    let marketState = "closed";
+    if (periods?.regular && now >= periods.regular.start && now < periods.regular.end) {
+      marketState = "regular";
+    } else if (periods?.pre && now >= periods.pre.start && now < periods.pre.end) {
+      marketState = "pre";
+    } else if (periods?.post && now >= periods.post.start && now < periods.post.end) {
+      marketState = "post";
+    }
+
+    const quote: SpyRealtimeQuote = {
+      price: Math.round(currentPrice * 100) / 100,
+      previousClose: Math.round(previousClose * 100) / 100,
+      change,
+      changePercent,
+      marketState,
+      updatedAt: Date.now(),
+    };
+
+    realtimeCache = { data: quote, fetchedAt: Date.now() };
+    return quote;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn("Failed to fetch realtime SPY quote", { error: message });
+    return realtimeCache?.data ?? null;
+  }
+}
+
 /**
  * Fetches just today's SPY quote (current price + daily change).
  */

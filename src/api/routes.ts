@@ -6,8 +6,9 @@ import {
   getHistoricalComparison,
   getCommentCountSince,
   getTopPosts,
+  getRecentOutcomes,
 } from "../services/database";
-import { fetchSpyToday } from "../services/spy";
+import { fetchSpyToday, fetchSpyRealtime } from "../services/spy";
 import { getActiveThreadType } from "../services/reddit";
 import { pollAndAnalyze } from "../services/scheduler";
 import { logger } from "../lib/logger";
@@ -158,6 +159,35 @@ router.get("/api/live-counts", (_req: Request, res: Response) => {
     bearishPercent: total > 0 ? Math.round((counts.bearish / total) * 10000) / 100 : 0,
     neutralPercent: total > 0 ? Math.round((counts.neutral / total) * 10000) / 100 : 0,
   });
+});
+
+/**
+ * GET /api/spy/realtime
+ * Returns current SPY price with 10s server-side cache. Includes pre/post market.
+ */
+router.get("/api/spy/realtime", async (_req: Request, res: Response) => {
+  try {
+    const quote = await fetchSpyRealtime();
+    res.json({ quote });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+/**
+ * GET /api/spy/scorecard
+ * Returns recent outcomes comparing WSB sentiment vs actual SPY movement.
+ */
+router.get("/api/spy/scorecard", async (_req: Request, res: Response) => {
+  try {
+    const quote = await fetchSpyRealtime();
+    const recentOutcomes = getRecentOutcomes(5);
+    res.json({ quote, recentOutcomes });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
 });
 
 /**

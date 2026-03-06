@@ -53,6 +53,45 @@ const WSB_PHRASE_SCORES: Array<{ pattern: RegExp; score: number }> = [
   { pattern: /\ball\s*in/i, score: 3 },
   { pattern: /\bATH\b/, score: 3 },
 
+  // WSB meme phrases — bullish
+  { pattern: /\bape(s)?\s+together\s+strong/i, score: 4 },
+  { pattern: /\bstonks?\s+(only\s+)?go\s+up/i, score: 4 },
+  { pattern: /\bhodl(ing)?\b/i, score: 3 },
+  { pattern: /\bmoney\s*printer\s*(go(es)?\s+)?brr+/i, score: 4 },
+  { pattern: /\bgain\s*porn/i, score: 3 },
+  { pattern: /\bsqueeze\s*(is\s+)?(on|coming|starting|happening)/i, score: 4 },
+  { pattern: /\bgamma\s*(ramp|squeeze)/i, score: 4 },
+  { pattern: /\bbullish\s+(af|as\s+fuck|as\s+hell|asf)/i, score: 5 },
+  { pattern: /\bfree\s*money\s*glitch/i, score: 3 },
+  { pattern: /\bcan('t|not)\s+(go\s+)?tits\s*up/i, score: 3 },
+  { pattern: /\bwe\s*(are\s+)?eating\s+good/i, score: 3 },
+  { pattern: /\bcoiled\s+(spring|up)/i, score: 3 },
+  { pattern: /\blet('s|s)?\s*(fuckin(g)?\s+)?go+\b/i, score: 3 },
+  { pattern: /\bsend(ing)?\s+it/i, score: 3 },
+  { pattern: /\bfomo\s*(ing|ed|'d)/i, score: 2 },
+  { pattern: /\bpaper\s*hands?\s*(bitch(es)?|sold)/i, score: 3 },
+
+  // WSB meme phrases — bearish
+  { pattern: /\bloss\s*porn/i, score: -2 },
+  { pattern: /\bbehind\s*(the\s+)?wendy('s|s)/i, score: -3 },
+  { pattern: /\bcircuit\s*breaker/i, score: -4 },
+  { pattern: /\bholding\s*(the\s+|these\s+)?bags?/i, score: -3 },
+  { pattern: /\bcopium/i, score: -3 },
+  { pattern: /\bbearish\s+(af|as\s+fuck|as\s+hell|asf)/i, score: -5 },
+  { pattern: /\bmargin\s*call(ed)?/i, score: -4 },
+  { pattern: /\bcatch(ing)?\s+(a\s+)?falling\s+knife/i, score: -3 },
+  { pattern: /\bknife\s*catch(ing|er)?/i, score: -2 },
+  { pattern: /\b(it('s|s)?\s+)?over\s+for\s+(us|bulls?|apes?)/i, score: -4 },
+  { pattern: /\btrap(ped)?\s+(bull|long)/i, score: -3 },
+  { pattern: /\btheta\s*(gang|burn|decay|crush)/i, score: -2 },
+  { pattern: /\bIV\s*crush/i, score: -2 },
+  { pattern: /\bblew\s+up\s+(my\s+)?(account|portfolio)/i, score: -4 },
+  { pattern: /\bsell\s*(the\s+)?rip/i, score: -3 },
+  { pattern: /\bgoing\s+to\s+(zero|0)\b/i, score: -5 },
+  { pattern: /\b(this\s+is\s+)?the\s+top/i, score: -3 },
+  { pattern: /\bguh+\b/i, score: -4 },
+  { pattern: /\bwipe(d)?\s+out/i, score: -3 },
+
   // Amplifiers with direction — "this is going to drill" vs "this is going to rip"
   { pattern: /\bgonna\s*(drill|tank|dump|crash|die)/i, score: -3 },
   { pattern: /\bgonna\s*(rip|fly|moon|pump|squeeze|print)/i, score: 3 },
@@ -79,6 +118,18 @@ const EMOJI_SCORES: Record<string, number> = {
   "\u{1F7E2}": 2,  // green circle
   "\u{1F402}": 2,  // ox/bull
 
+  // Bullish emojis (additional)
+  "\u{1F98D}": 2,  // gorilla (ape)
+  "\u{1F451}": 2,  // crown
+  "\u{1F4AA}": 2,  // flexed bicep
+  "\u{1F440}": 1,  // eyes (watching, interest)
+  "\u{1F9E0}": 1,  // brain (wrinkle brain)
+  "\u{1F3C6}": 2,  // trophy
+  "\u{1F319}": 2,  // crescent moon
+  "\u{1F315}": 2,  // full moon
+  "\u{1F924}": 2,  // drooling face (money drool)
+  "\u{1F37E}": 2,  // champagne
+
   // Bearish emojis
   "\u{1F4C9}": -2, // chart decreasing
   "\u{1F43B}": -3, // bear
@@ -94,6 +145,10 @@ const EMOJI_SCORES: Record<string, number> = {
   "\u{1F92E}": -2, // vomiting
   "\u{1F921}": -2, // clown (you're a clown for this trade)
   "\u{1F3AA}": -1, // circus
+  "\u{1F494}": -2, // broken heart
+  "\u{1F635}": -2, // face with spiral eyes (stunned)
+  "\u{1F6BD}": -2, // toilet (flushed money)
+  "\u{1F52A}": -2, // knife (falling knife)
 };
 
 // Additional WSB-specific words to inject into the sentiment library's lexicon
@@ -122,6 +177,33 @@ const WSB_LEXICON: Record<string, number> = {
   "yolo": 1,
   "lambo": 3,
   "uppies": 2,
+  "hodl": 3,
+  "hodling": 3,
+  "stonk": 1,
+  "stonks": 1,
+  "ape": 2,
+  "apes": 2,
+  "undervalued": 3,
+  "oversold": 2,
+  "accumulating": 2,
+  "accumulate": 2,
+  "fomo": 1,
+  "hopium": 1,
+  "rocket": 2,
+  "skyrocket": 3,
+  "parabolic": 3,
+  "BTFD": 3,
+  "btd": 2,
+  "multibagger": 3,
+  "bagger": 2,
+  "runner": 2,
+  "ripper": 2,
+  "explode": 2,
+  "exploding": 2,
+  "chad": 2,
+  "gigachad": 3,
+  "goated": 2,
+  "based": 1,
 
   // Bearish
   "bearish": -3,
@@ -147,6 +229,34 @@ const WSB_LEXICON: Record<string, number> = {
   "downies": -2,
   "cliff": -2,
   "fade": -1,
+  "copium": -2,
+  "regarded": -1,
+  "degen": -1,
+  "overleveraged": -3,
+  "overvalued": -3,
+  "overbought": -2,
+  "dilution": -3,
+  "diluted": -3,
+  "liquidated": -3,
+  "liquidation": -3,
+  "worthless": -4,
+  "expired": -2,
+  "capitulation": -3,
+  "capitulate": -3,
+  "delisted": -4,
+  "bankruptcy": -4,
+  "bankrupt": -4,
+  "insolvent": -4,
+  "trapped": -2,
+  "underwater": -3,
+  "ponzi": -3,
+  "scam": -3,
+  "fraud": -3,
+  "nosedive": -3,
+  "freefall": -4,
+  "implode": -3,
+  "imploding": -3,
+  "nothingburger": -1,
 
   // Profanity as amplifiers (contextual — these shift existing sentiment)
   "fucking": 1, // amplifier, slight positive bias (excitement)

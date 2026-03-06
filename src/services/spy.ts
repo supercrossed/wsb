@@ -144,8 +144,20 @@ export async function fetchSpyRealtime(): Promise<SpyRealtimeQuote | null> {
     }
 
     const { meta } = result;
-    const currentPrice = meta.regularMarketPrice;
     const previousClose = meta.previousClose ?? meta.chartPreviousClose;
+
+    // Use the latest data point from the chart for pre/post market prices
+    // meta.regularMarketPrice only reflects the regular session close
+    let currentPrice = meta.regularMarketPrice;
+    if (result.timestamp && result.indicators?.quote?.[0]) {
+      const closes = result.indicators.quote[0].close;
+      for (let i = closes.length - 1; i >= 0; i--) {
+        if (closes[i] != null) {
+          currentPrice = closes[i];
+          break;
+        }
+      }
+    }
     const change = Math.round((currentPrice - previousClose) * 100) / 100;
     const changePercent = Math.round((change / previousClose) * 10000) / 100;
 

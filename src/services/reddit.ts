@@ -115,26 +115,41 @@ export async function findActiveThread(
 
   const queries = searchQueries[threadType];
 
+  // Search multiple listing types — weekend/overnight threads may not be "hot" yet
+  const endpoints = [
+    `${BASE_URL}/r/${config.reddit.subreddit}/hot.json?limit=25`,
+    `${BASE_URL}/r/${config.reddit.subreddit}/new.json?limit=10`,
+  ];
+
   try {
-    const url = `${BASE_URL}/r/${config.reddit.subreddit}/hot.json?limit=15`;
-    const listing = await redditFetch<RedditListingResponse>(url);
+    for (const url of endpoints) {
+      const listing = await redditFetch<RedditListingResponse>(url);
 
-    for (const child of listing.data.children) {
-      const post = child.data;
-      const title = (post.title ?? "").toLowerCase();
+      // Check stickied posts first — discussion threads are usually stickied
+      const sorted = [...listing.data.children].sort((a, b) => {
+        const aSticky = a.data.stickied ? 1 : 0;
+        const bSticky = b.data.stickied ? 1 : 0;
+        return bSticky - aSticky;
+      });
 
-      for (const query of queries) {
-        if (title.includes(query)) {
-          logger.info("Found active thread", {
-            threadType,
-            title: post.title,
-            id: post.id,
-          });
-          return {
-            id: post.id,
-            title: post.title ?? "",
-            permalink: `${BASE_URL}/r/${config.reddit.subreddit}/comments/${post.id}.json`,
-          };
+      for (const child of sorted) {
+        const post = child.data;
+        const title = (post.title ?? "").toLowerCase();
+
+        for (const query of queries) {
+          if (title.includes(query)) {
+            logger.info("Found active thread", {
+              threadType,
+              title: post.title,
+              id: post.id,
+              source: url.includes("/hot") ? "hot" : "new",
+            });
+            return {
+              id: post.id,
+              title: post.title ?? "",
+              permalink: `${BASE_URL}/r/${config.reddit.subreddit}/comments/${post.id}.json`,
+            };
+          }
         }
       }
     }

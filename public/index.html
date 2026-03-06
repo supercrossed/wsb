@@ -993,17 +993,17 @@
 
         const q = spyData.quote;
         const s = sentData.sentiment;
-        const rec = s ? s.recommendation : null;
 
         // Live intraday verdict: compare current WSB sentiment vs SPY direction right now
-        if (q && s && rec && rec !== 'HOLD') {
+        // Always use raw bull/bear split — no HOLD gating on the scorecard
+        if (q && s && s.totalComments > 0) {
           const spyUp = q.change > 0;
           const spyDir = spyUp ? 'up' : 'down';
           const spyFlat = Math.abs(q.changePercent) < 0.05;
           const wsbBullish = s.bullishPercent > s.bearishPercent;
           const wsbSentiment = wsbBullish ? 'bullish' : 'bearish';
+          const inverseRec = wsbBullish ? 'PUTS' : 'CALLS';
 
-          // Inverse logic: if WSB bullish → inverse says PUTS (bet on down)
           // Inverse correct when: WSB bullish + SPY down, or WSB bearish + SPY up
           const inverseCorrect = wsbBullish ? !spyUp : spyUp;
 
@@ -1015,7 +1015,7 @@
           if (spyFlat) {
             verdictEl.textContent = 'SPY is flat. Even the market doesn\'t know what to do.';
             verdictEl.className = 'spy-verdict-text no-data';
-            subEl.textContent = 'WSB: ' + wsbSentiment + ' | SPY: ' + q.change.toFixed(2) + ' (' + q.changePercent.toFixed(2) + '%) — too close to call';
+            subEl.textContent = 'WSB: ' + wsbSentiment + ' (' + Math.max(s.bullishPercent, s.bearishPercent).toFixed(1) + '%) | SPY: ' + q.changePercent.toFixed(2) + '% — too close to call';
           } else if (inverseCorrect) {
             const verdicts = [
               'WSB regards are wrong again. You should have done the inverse.',
@@ -1028,7 +1028,7 @@
             ];
             verdictEl.textContent = verdicts[Math.floor(Math.random() * verdicts.length)];
             verdictEl.className = 'spy-verdict-text inverse-right';
-            subEl.textContent = 'WSB: ' + wsbSentiment + ' → Inverse: ' + rec + ' → SPY: ' + spyDir + ' ' + q.changePercent.toFixed(2) + '% ✔';
+            subEl.textContent = 'WSB: ' + wsbSentiment + ' (' + Math.max(s.bullishPercent, s.bearishPercent).toFixed(1) + '%) → Inverse: ' + inverseRec + ' → SPY: ' + spyDir + ' ' + q.changePercent.toFixed(2) + '% ✔';
           } else {
             const verdicts = [
               'Well... WSB is actually right today. Even a broken clock.',
@@ -1040,15 +1040,8 @@
             ];
             verdictEl.textContent = verdicts[Math.floor(Math.random() * verdicts.length)];
             verdictEl.className = 'spy-verdict-text inverse-wrong';
-            subEl.textContent = 'WSB: ' + wsbSentiment + ' → Inverse: ' + rec + ' → SPY: ' + spyDir + ' ' + q.changePercent.toFixed(2) + '% ✘';
+            subEl.textContent = 'WSB: ' + wsbSentiment + ' (' + Math.max(s.bullishPercent, s.bearishPercent).toFixed(1) + '%) → Inverse: ' + inverseRec + ' → SPY: ' + spyDir + ' ' + q.changePercent.toFixed(2) + '% ✘';
           }
-        } else if (q && s && rec === 'HOLD') {
-          const hash = 'hold:' + (q.change > 0 ? 'up' : 'down');
-          if (hash === lastVerdictHash) return;
-          lastVerdictHash = hash;
-          verdictEl.textContent = 'WSB sentiment is mixed. Even the regards can\'t agree.';
-          verdictEl.className = 'spy-verdict-text no-data';
-          subEl.textContent = 'No strong signal — SPY ' + (q.change >= 0 ? '+' : '') + q.changePercent.toFixed(2) + '% today';
         } else {
           if (lastVerdictHash === 'waiting') return;
           lastVerdictHash = 'waiting';

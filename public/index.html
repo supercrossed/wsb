@@ -952,7 +952,7 @@
     }
 
     // SPY scorecard (verdict + streak, every 60s)
-    let lastVerdictHash = '';
+    let lastVerdictHash = null;
     async function fetchSpyScorecard() {
       try {
         const res = await fetch('/api/spy/scorecard');
@@ -1034,8 +1034,8 @@
           dot.textContent = '-';
           streakContainer.appendChild(dot);
         }
-      } catch {
-        /* non-critical */
+      } catch (err) {
+        console.warn('Scorecard fetch failed:', err);
       }
     }
 

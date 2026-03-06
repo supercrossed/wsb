@@ -305,6 +305,45 @@
       max-width: 280px;
       line-height: 1.5;
     }
+    .rec-scorecard {
+      margin-top: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+      width: 100%;
+      justify-content: center;
+    }
+    .rec-scorecard canvas {
+      width: 80px !important;
+      height: 80px !important;
+    }
+    .rec-scorecard-legend {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+    }
+    .rec-scorecard-legend .sc-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .rec-scorecard-legend .sc-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .rec-scorecard-legend .sc-label {
+      color: var(--text-muted);
+    }
+    .rec-scorecard-legend .sc-value {
+      font-weight: 700;
+      color: var(--text);
+    }
 
     /* Cramer Index Card */
     .cramer-card {
@@ -705,6 +744,10 @@
           <div class="rec-tagline hold" id="recTagline">&nbsp;</div>
           <div class="action hold" id="recommendation">--</div>
           <div class="rec-explanation" id="recExplanation">Waiting for data...</div>
+          <div class="rec-scorecard" id="recScorecard">
+            <canvas id="scorecardPie" width="100" height="100"></canvas>
+            <div class="rec-scorecard-legend" id="scorecardLegend"></div>
+          </div>
         </div>
 
         <!-- Cramer Index Card -->
@@ -1465,17 +1508,70 @@
       }
     }
 
+    let scorecardPieChart = null;
+
+    async function fetchInverseScorecard() {
+      try {
+        var res = await fetch('/api/inverse-scorecard');
+        var d = await res.json();
+        if (d.total === 0) return;
+
+        var legend = document.getElementById('scorecardLegend');
+        legend.innerHTML =
+          '<div class="sc-row"><span class="sc-dot" style="background:var(--green)"></span>' +
+          '<span class="sc-label">Right</span><span class="sc-value">' + d.right + ' (' + d.rightPercent + '%)</span></div>' +
+          '<div class="sc-row"><span class="sc-dot" style="background:var(--red)"></span>' +
+          '<span class="sc-label">Wrong</span><span class="sc-value">' + d.wrong + ' (' + d.wrongPercent + '%)</span></div>' +
+          '<div class="sc-row"><span class="sc-label" style="font-size:0.6rem">Last 30 days</span></div>';
+
+        var ctx = document.getElementById('scorecardPie').getContext('2d');
+        if (scorecardPieChart) {
+          scorecardPieChart.data.datasets[0].data = [d.right, d.wrong];
+          scorecardPieChart.update();
+        } else {
+          scorecardPieChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+              labels: ['Right', 'Wrong'],
+              datasets: [{
+                data: [d.right, d.wrong],
+                backgroundColor: ['#00ff87', '#ff3b5c'],
+                borderWidth: 0,
+                hoverOffset: 2
+              }]
+            },
+            options: {
+              responsive: false,
+              cutout: '60%',
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  callbacks: {
+                    label: function(ctx) { return ctx.label + ': ' + ctx.raw; }
+                  }
+                }
+              }
+            }
+          });
+        }
+      } catch (err) {
+        console.warn('Inverse scorecard fetch failed:', err);
+      }
+    }
+
     // Initial fetch + polling
     fetchSentiment();
     fetchSpyRealtime();
     fetchSpyScorecard();
     fetchCramerIndex();
     fetchSystemStats();
+    fetchInverseScorecard();
     setInterval(fetchSentiment, 30000);
     setInterval(fetchSpyRealtime, 5000);
     setInterval(fetchSpyScorecard, 10000);
     setInterval(fetchCramerIndex, 300000);
     setInterval(fetchSystemStats, 3000);
+    setInterval(fetchInverseScorecard, 60000);
   </script>
 </body>
 </html>

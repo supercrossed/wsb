@@ -11,6 +11,7 @@ import {
   getRecentOutcomes,
   getCramerPicks,
   getSpyChangeByDate,
+  getDb,
 } from "../services/database";
 import { fetchSpyToday, fetchSpyRealtime } from "../services/spy";
 import { getActiveThreadType } from "../services/reddit";
@@ -241,6 +242,38 @@ router.get("/api/cramer", (_req: Request, res: Response) => {
   });
 
   res.json({ ...index, recentPicks: recentWithVerdict });
+});
+
+/**
+ * GET /api/inverse-scorecard
+ * Returns 30-day right/wrong counts for the inverse WSB strategy.
+ */
+router.get("/api/inverse-scorecard", (_req: Request, res: Response) => {
+  const rows = getDb()
+    .prepare(
+      `SELECT inverse_correct, COUNT(*) as count
+       FROM historical
+       WHERE date >= date('now', '-30 days')
+         AND inverse_correct IS NOT NULL
+       GROUP BY inverse_correct`,
+    )
+    .all() as { inverse_correct: number; count: number }[];
+
+  let right = 0;
+  let wrong = 0;
+  for (const row of rows) {
+    if (row.inverse_correct === 1) right = row.count;
+    else wrong = row.count;
+  }
+
+  const total = right + wrong;
+  res.json({
+    right,
+    wrong,
+    total,
+    rightPercent: total > 0 ? Math.round((right / total) * 10000) / 100 : 0,
+    wrongPercent: total > 0 ? Math.round((wrong / total) * 10000) / 100 : 0,
+  });
 });
 
 // --- Hardware monitoring ---

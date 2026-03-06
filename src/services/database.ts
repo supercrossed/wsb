@@ -95,12 +95,13 @@ export function saveFullComment(
   sentiment: string,
   confidence: number,
   tickers: string[],
-): void {
+): boolean {
   const stmt = getDb().prepare(`
     INSERT OR IGNORE INTO comments (id, body, author, created_utc, thread_id, thread_type, sentiment, confidence, tickers)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  stmt.run(id, body, author, createdUtc, threadId, threadType, sentiment, confidence, JSON.stringify(tickers));
+  const result = stmt.run(id, body, author, createdUtc, threadId, threadType, sentiment, confidence, JSON.stringify(tickers));
+  return result.changes > 0;
 }
 
 export function saveDailySentiment(entry: DailySentiment): void {

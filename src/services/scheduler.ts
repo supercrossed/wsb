@@ -16,7 +16,6 @@ import {
 } from "./database";
 import type { DailySentiment, ThreadType } from "../types";
 
-let lastFetchUtc = 0;
 let isPolling = false;
 
 function getTodayDateString(): string {
@@ -80,21 +79,19 @@ async function pollAndAnalyze(): Promise<void> {
       return;
     }
 
-    const comments = await fetchThreadComments(
-      thread,
-      threadType,
-      lastFetchUtc,
-    );
+    // Fetch all comments from the thread; DB deduplicates via INSERT OR IGNORE
+    const comments = await fetchThreadComments(thread, threadType);
 
     if (comments.length === 0) {
-      logger.debug("No new comments since last poll");
+      logger.debug("No comments found in thread");
       return;
     }
 
-    // Analyze and save each comment
+    // Analyze and save each comment (dupes are ignored by DB)
+    let newCount = 0;
     for (const comment of comments) {
       const result = analyzeSentiment(comment.body);
-      saveFullComment(
+      const inserted = saveFullComment(
         comment.id,
         comment.body,
         comment.author,
@@ -105,10 +102,7 @@ async function pollAndAnalyze(): Promise<void> {
         result.confidence,
         result.tickers,
       );
-
-      if (comment.createdUtc > lastFetchUtc) {
-        lastFetchUtc = comment.createdUtc;
-      }
+      if (inserted) newCount++;
     }
 
     // Recompute daily sentiment from all comments in this period
@@ -144,7 +138,8 @@ async function pollAndAnalyze(): Promise<void> {
     saveDailySentiment(dailySentiment);
 
     logger.info("Poll complete", {
-      newComments: comments.length,
+      fetched: comments.length,
+      new: newCount,
       total,
       bullishPercent,
       bearishPercent,

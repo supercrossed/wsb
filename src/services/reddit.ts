@@ -189,10 +189,11 @@ async function fetchMoreChildren(
 export async function fetchThreadComments(
   thread: { id: string; permalink: string },
   threadType: ThreadType,
-  sinceUtc: number = 0,
 ): Promise<RedditComment[]> {
   try {
-    const url = `${thread.permalink}?limit=500&sort=new`;
+    // Sort by "top" to get the most-replied comments first, which contain
+    // the deepest "more" trees. Limit 500 is the Reddit max per request.
+    const url = `${thread.permalink}?limit=500&sort=confidence`;
     const data = await redditFetch<RedditListingResponse[]>(url);
 
     if (!data[1]?.data?.children) {
@@ -219,8 +220,6 @@ export async function fetchThreadComments(
       if (!c.body || c.body === "[deleted]" || c.body === "[removed]") return;
       if (c.author === "AutoModerator" || c.author === "[deleted]") return;
 
-      if (c.created_utc <= sinceUtc) return;
-
       comments.push({
         id: c.id,
         body: c.body,
@@ -246,7 +245,7 @@ export async function fetchThreadComments(
       processComment(child);
     }
 
-    // Expand "more" comment stubs if we have any
+    // Expand "more" comment stubs to get the full thread
     if (moreIds.length > 0) {
       logger.info("Expanding more comments", {
         moreCount: moreIds.length,

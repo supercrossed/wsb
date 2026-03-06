@@ -47,10 +47,10 @@ const WSB_PHRASE_SCORES: Array<{ pattern: RegExp; score: number }> = [
 
   // Strongly bullish phrases
   { pattern: /\bbull\s*run/i, score: 4 },
-  { pattern: /\bfree\s*money/i, score: 3 },
+  // "free money" removed — ambiguous, often sarcastic
   { pattern: /\bgap\s*up/i, score: 3 },
   { pattern: /\bbear(s)?\s*(are\s+)?(fuk|fked|fucked|trapped)/i, score: 4 },
-  { pattern: /\ball\s*in/i, score: 3 },
+  // "all in" removed — directional but doesn't indicate bull/bear
   { pattern: /\bATH\b/, score: 3 },
 
   // WSB meme phrases — bullish
@@ -62,13 +62,13 @@ const WSB_PHRASE_SCORES: Array<{ pattern: RegExp; score: number }> = [
   { pattern: /\bsqueeze\s*(is\s+)?(on|coming|starting|happening)/i, score: 4 },
   { pattern: /\bgamma\s*(ramp|squeeze)/i, score: 4 },
   { pattern: /\bbullish\s+(af|as\s+fuck|as\s+hell|asf)/i, score: 5 },
-  { pattern: /\bfree\s*money\s*glitch/i, score: 3 },
+  // "free money glitch" removed — ambiguous, often sarcastic
   { pattern: /\bcan('t|not)\s+(go\s+)?tits\s*up/i, score: 3 },
   { pattern: /\bwe\s*(are\s+)?eating\s+good/i, score: 3 },
   { pattern: /\bcoiled\s+(spring|up)/i, score: 3 },
   { pattern: /\blet('s|s)?\s*(fuckin(g)?\s+)?go+\b/i, score: 3 },
-  { pattern: /\bsend(ing)?\s+it/i, score: 3 },
-  { pattern: /\bfomo\s*(ing|ed|'d)/i, score: 2 },
+  // "send it" removed — excitement but not directional
+  // "fomo" removed — can be buying or selling panic
   { pattern: /\bpaper\s*hands?\s*(bitch(es)?|sold)/i, score: 3 },
 
   // WSB meme phrases — bearish
@@ -174,7 +174,7 @@ const WSB_LEXICON: Record<string, number> = {
   "brrr": 2,
   "print": 2,
   "printing": 2,
-  "yolo": 1,
+  // "yolo" removed — risky bet, not directional
   "lambo": 3,
   "uppies": 2,
   "hodl": 3,
@@ -187,7 +187,7 @@ const WSB_LEXICON: Record<string, number> = {
   "oversold": 2,
   "accumulating": 2,
   "accumulate": 2,
-  "fomo": 1,
+  // "fomo" removed — not directional
   "hopium": 1,
   "rocket": 2,
   "skyrocket": 3,
@@ -203,7 +203,7 @@ const WSB_LEXICON: Record<string, number> = {
   "chad": 2,
   "gigachad": 3,
   "goated": 2,
-  "based": 1,
+  // "based" removed — means agreement, not bullish
 
   // Bearish
   "bearish": -3,
@@ -230,8 +230,8 @@ const WSB_LEXICON: Record<string, number> = {
   "cliff": -2,
   "fade": -1,
   "copium": -2,
-  "regarded": -1,
-  "degen": -1,
+  // "regarded" removed — WSB self-deprecation, not directional
+  // "degen" removed — self-deprecating, not bearish
   "overleveraged": -3,
   "overvalued": -3,
   "overbought": -2,
@@ -262,9 +262,6 @@ const WSB_LEXICON: Record<string, number> = {
   "fucking": 1, // amplifier, slight positive bias (excitement)
   "fuckin": 1,
   "shit": -1,
-  "damn": 0,
-  "hell": 0,
-  "ass": 0,
 };
 
 // Register WSB lexicon with the sentiment library

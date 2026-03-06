@@ -7,7 +7,7 @@ const BASE_URL = "https://www.reddit.com";
 const USER_AGENT = config.reddit.userAgent;
 
 // Rate limit: wait between requests to avoid 429s from public API
-const REQUEST_DELAY_MS = 1500;
+const REQUEST_DELAY_MS = 2000;
 
 interface RedditListingChild {
   kind: string;
@@ -49,7 +49,7 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function redditFetch<T>(url: string): Promise<T> {
+async function redditFetch<T>(url: string, retries = 0): Promise<T> {
   const res = await fetch(url, {
     headers: {
       "User-Agent": USER_AGENT,
@@ -58,9 +58,13 @@ async function redditFetch<T>(url: string): Promise<T> {
   });
 
   if (res.status === 429) {
-    logger.warn("Reddit rate limited, backing off 5s");
-    await delay(5000);
-    return redditFetch<T>(url);
+    if (retries >= 3) {
+      throw new AppError("Reddit rate limit exceeded after 3 retries", "REDDIT_RATE_LIMIT", { url });
+    }
+    const backoff = 5000 * Math.pow(2, retries);
+    logger.warn("Reddit rate limited, backing off", { backoffMs: backoff, retry: retries + 1 });
+    await delay(backoff);
+    return redditFetch<T>(url, retries + 1);
   }
 
   if (!res.ok) {

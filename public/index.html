@@ -372,11 +372,13 @@
       font-size: 2rem;
       font-weight: 700;
       line-height: 1;
-      transition: color 0.3s ease;
+      transition: color 1.5s ease;
     }
     .spy-price-big.up { color: var(--green); }
     .spy-price-big.down { color: var(--red); }
     .spy-price-big.flat { color: var(--text); }
+    .spy-price-big.flash-up { color: #00ff88; transition: none; }
+    .spy-price-big.flash-down { color: #ff4466; transition: none; }
     .spy-daily-change {
       font-size: 0.95rem;
       font-weight: 700;
@@ -927,7 +929,9 @@
       });
     }
 
-    // Real-time SPY price (every 10s)
+    // Real-time SPY price (every 5s)
+    let lastSpyPrice = null;
+    let flashTimeout = null;
     async function fetchSpyRealtime() {
       try {
         const res = await fetch('/api/spy/realtime');
@@ -940,7 +944,22 @@
         const q = data.quote;
         const priceEl = document.getElementById('spyPrice');
         priceEl.textContent = '$' + q.price.toFixed(2);
-        priceEl.className = 'spy-price-big ' + (q.change > 0 ? 'up' : q.change < 0 ? 'down' : 'flat');
+
+        // Daily overall color class
+        const dailyClass = q.change > 0 ? 'up' : q.change < 0 ? 'down' : 'flat';
+
+        // Flash on tick: bright green/red based on price movement since last update
+        if (lastSpyPrice !== null && q.price !== lastSpyPrice) {
+          const tickUp = q.price > lastSpyPrice;
+          if (flashTimeout) clearTimeout(flashTimeout);
+          priceEl.className = 'spy-price-big ' + (tickUp ? 'flash-up' : 'flash-down');
+          flashTimeout = setTimeout(() => {
+            priceEl.className = 'spy-price-big ' + dailyClass;
+          }, 50);
+        } else {
+          priceEl.className = 'spy-price-big ' + dailyClass;
+        }
+        lastSpyPrice = q.price;
 
         const changeEl = document.getElementById('spyChange');
         const sign = q.change >= 0 ? '+' : '';

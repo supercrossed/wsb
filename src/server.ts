@@ -17,7 +17,7 @@ export function createServer(): express.Express {
   app.use(router);
 
   // SPA fallback: serve index.html for non-API routes
-  app.get("*", (_req, res) => {
+  app.get("/{*splat}", (_req, res) => {
     res.sendFile(path.resolve(__dirname, "../public/index.html"));
   });
 

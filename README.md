@@ -13,15 +13,31 @@ Runs on an Orange Pi Zero 2 and serves a dashboard on your local network.
    - `sentiment` NLP library for full-sentence analysis
    - 40+ WSB-specific phrase patterns (context-aware, e.g. "my puts about to rip" = bearish)
    - Emoji scoring (rocket, bear, diamond hands, etc.)
-3. **Recommends the inverse** — if WSB is bullish, it says PUTS. If bearish, CALLS. With entertaining taglines.
+3. **Tracks SPY prices** — fetches daily SPY data from Yahoo Finance, overlays on sentiment charts, and computes inverse strategy accuracy
+4. **Recommends the inverse** — if WSB is bullish, it says PUTS. If bearish, CALLS. With entertaining taglines.
 
 ## Dashboard
 
-- Real-time bullish vs bearish pie chart (neutral excluded)
-- Animated sentiment bar
-- CALLS / PUTS / HOLD recommendation with glowing neon UI
-- 90-day historical sentiment trend
-- Inverse strategy accuracy tracking (once SPY data is integrated)
+- Real-time bullish vs bearish doughnut chart (neutral excluded)
+- Animated sentiment bar with green-to-red gradient
+- CALLS / PUTS / HOLD recommendation with glowing neon UI and WSB-style taglines
+- Live SPY price ticker with daily change
+- 90-day historical sentiment trend with SPY price overlay
+- Inverse strategy accuracy tracking with cumulative win rate
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/sentiment/today` | GET | Today's aggregated sentiment and recommendation |
+| `/api/sentiment/history?days=90` | GET | Rolling sentiment history |
+| `/api/historical?days=90` | GET | Historical entries with SPY outcomes |
+| `/api/live-counts` | GET | Real-time bullish/bearish/neutral counts |
+| `/api/top-posts` | GET | Today's top 10 WSB posts with sentiment |
+| `/api/spy/today` | GET | Current SPY price and daily change |
+| `/api/spy/history?days=90` | GET | SPY prices from historical table |
+| `/api/status` | GET | App status and config info |
+| `/api/poll` | POST | Manually trigger a poll cycle |
 
 ## Tech Stack
 
@@ -29,7 +45,8 @@ Runs on an Orange Pi Zero 2 and serves a dashboard on your local network.
 - **Database:** SQLite via better-sqlite3 (WAL mode)
 - **Web:** Express 5 serving a Chart.js dashboard
 - **Reddit:** Public JSON API (no auth required)
-- **Sentiment:** `sentiment` npm library + custom WSB lexicon
+- **Sentiment:** `sentiment` npm library + custom WSB lexicon + emoji scoring
+- **Market Data:** Yahoo Finance public chart API (no auth required)
 
 ## Prerequisites
 
@@ -116,8 +133,9 @@ src/
   services/
     database.ts          # SQLite schema, queries, purge logic
     reddit.ts            # Reddit public API fetching
-    scheduler.ts         # 60s poll loop, top posts, sentiment aggregation
+    scheduler.ts         # 60s poll loop, top posts, SPY backfill, sentiment aggregation
     sentiment.ts         # NLP + emoji + WSB phrase analysis
+    spy.ts               # Yahoo Finance SPY price fetching
   types/index.ts         # TypeScript interfaces
   server.ts              # Express server
   index.ts               # Entry point
@@ -131,7 +149,7 @@ scripts/
 
 - **Comments:** 2 days (enough for overnight thread analysis)
 - **Daily sentiment:** 90 days (dashboard history)
-- **Historical records:** Forever (inverse strategy accuracy tracking)
+- **Historical records:** Forever (inverse strategy accuracy tracking + SPY prices)
 - **Top posts:** 2 days
 
 ## Thread Schedule (EST)
@@ -142,7 +160,13 @@ scripts/
 | What Are Your Moves Tomorrow | 4:00 PM - 6:59 AM weekdays |
 | Weekend Discussion | Friday 4:00 PM - Monday 6:59 AM |
 
+## SPY Integration
+
+- **Backfill:** On startup, fetches 90 days of SPY daily prices from Yahoo Finance
+- **Daily update:** Cron job at 5 PM EST (after market close) refreshes prices
+- **Accuracy tracking:** Each day's inverse recommendation is compared against actual SPY movement to compute a running accuracy score
+- **Dashboard overlay:** SPY close prices shown as a dashed yellow line on the 90-day history chart
+
 ## Future
 
-- SPY price integration for accuracy tracking
 - Alpaca-based 0DTE options trading bot

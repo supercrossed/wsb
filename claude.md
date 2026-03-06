@@ -86,6 +86,12 @@ src/
 ```
 For Python, Rust, Go, etc. — follow standard project layouts (`src/`, `pkg/`, `cmd/`, `tests/`, etc.).
 
+## Git Policy
+- **Always commit and push** after completing work. Do not wait for the user to ask.
+- Use conventional commit messages (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `test:`)
+- Type-check (`tsc --noEmit`) must pass before committing
+- Push to `origin master` after each commit
+
 ## Escalation
 1. Agent stuck 2+ attempts → Lead Dev
 2. Lead Dev stuck → Orchestrator re-architects

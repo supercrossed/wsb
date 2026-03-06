@@ -6,6 +6,9 @@ import type { RedditComment, ThreadType } from "../types";
 const BASE_URL = "https://www.reddit.com";
 const USER_AGENT = config.reddit.userAgent;
 
+// Rate limit: wait between requests to avoid 429s from public API
+const REQUEST_DELAY_MS = 1500;
+
 interface RedditListingChild {
   kind: string;
   data: {
@@ -16,6 +19,9 @@ interface RedditListingChild {
     created_utc: number;
     stickied?: boolean;
     distinguished?: string | null;
+    children?: string[];
+    parent_id?: string;
+    link_id?: string;
     replies?: { kind: string; data: { children: RedditListingChild[] } } | "";
   };
 }
@@ -28,6 +34,18 @@ interface RedditListingResponse {
   };
 }
 
+interface MoreChildrenResponse {
+  json: {
+    data: {
+      things: RedditListingChild[];
+    };
+  };
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function redditFetch<T>(url: string): Promise<T> {
   const res = await fetch(url, {
     headers: {
@@ -35,6 +53,12 @@ async function redditFetch<T>(url: string): Promise<T> {
       Accept: "application/json",
     },
   });
+
+  if (res.status === 429) {
+    logger.warn("Reddit rate limited, backing off 5s");
+    await delay(5000);
+    return redditFetch<T>(url);
+  }
 
   if (!res.ok) {
     throw new AppError("Reddit API request failed", "REDDIT_HTTP_ERROR", {
@@ -124,8 +148,43 @@ export async function findActiveThread(
 }
 
 /**
+ * Fetches "more" comments using Reddit's morechildren API.
+ * Processes in batches of 100 IDs (API limit).
+ */
+async function fetchMoreChildren(
+  linkId: string,
+  moreIds: string[],
+): Promise<RedditListingChild[]> {
+  const allComments: RedditListingChild[] = [];
+  const batchSize = 100;
+
+  for (let i = 0; i < moreIds.length; i += batchSize) {
+    const batch = moreIds.slice(i, i + batchSize);
+    const ids = batch.join(",");
+    const url = `${BASE_URL}/api/morechildren.json?api_type=json&link_id=t3_${linkId}&children=${ids}`;
+
+    try {
+      await delay(REQUEST_DELAY_MS);
+      const res = await redditFetch<MoreChildrenResponse>(url);
+
+      if (res.json?.data?.things) {
+        allComments.push(...res.json.data.things);
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.warn("Failed to fetch more children batch", {
+        batch: i / batchSize,
+        error: message,
+      });
+    }
+  }
+
+  return allComments;
+}
+
+/**
  * Fetches comments from a thread using the public JSON endpoint.
- * Reddit returns comments in a nested tree; we flatten them recursively.
+ * Recursively expands "more" comment stubs to get all comments.
  */
 export async function fetchThreadComments(
   thread: { id: string; permalink: string },
@@ -133,22 +192,27 @@ export async function fetchThreadComments(
   sinceUtc: number = 0,
 ): Promise<RedditComment[]> {
   try {
-    // Fetch the thread comments — limit=500 is the max per request
     const url = `${thread.permalink}?limit=500&sort=new`;
     const data = await redditFetch<RedditListingResponse[]>(url);
 
-    // Reddit returns [post_listing, comments_listing]
     if (!data[1]?.data?.children) {
       logger.warn("No comments in thread response", { threadId: thread.id });
       return [];
     }
 
     const comments: RedditComment[] = [];
+    const moreIds: string[] = [];
 
     function processComment(child: RedditListingChild): void {
       const c = child.data;
 
-      // Skip non-comment nodes (e.g. "more" stubs)
+      // Collect "more" comment IDs for expansion
+      if (child.kind === "more" && c.children) {
+        moreIds.push(...c.children);
+        return;
+      }
+
+      // Skip non-comment nodes
       if (child.kind !== "t1") return;
 
       // Skip deleted/removed and bots
@@ -180,6 +244,25 @@ export async function fetchThreadComments(
 
     for (const child of data[1].data.children) {
       processComment(child);
+    }
+
+    // Expand "more" comment stubs if we have any
+    if (moreIds.length > 0) {
+      logger.info("Expanding more comments", {
+        moreCount: moreIds.length,
+        threadId: thread.id,
+      });
+
+      const moreComments = await fetchMoreChildren(thread.id, moreIds);
+
+      for (const child of moreComments) {
+        processComment(child);
+      }
+
+      logger.info("Expanded more comments", {
+        expanded: moreComments.length,
+        totalNow: comments.length,
+      });
     }
 
     logger.info("Fetched comments", {

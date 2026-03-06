@@ -10,11 +10,11 @@ export function createServer(): express.Express {
 
   app.use(express.json());
 
+  // API routes (before static so they always take priority)
+  app.use(router);
+
   // Serve static frontend files
   app.use(express.static(path.resolve(__dirname, "../public")));
-
-  // API routes
-  app.use(router);
 
   // SPA fallback: serve index.html for non-API routes
   app.get("/{*splat}", (_req, res) => {

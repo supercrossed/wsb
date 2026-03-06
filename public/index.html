@@ -127,8 +127,11 @@
 
     .grid-main {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(3, 1fr);
       gap: 20px;
+    }
+    @media (max-width: 1024px) {
+      .grid-main { grid-template-columns: 1fr 1fr; }
     }
     @media (max-width: 768px) {
       .grid-main { grid-template-columns: 1fr; }
@@ -608,7 +611,7 @@
         </div>
 
         <!-- Cramer Index Card -->
-        <div class="card cramer-card" id="cramerCard" style="display:none;">
+        <div class="card cramer-card" id="cramerCard">
           <div class="cramer-label">Cramer Index</div>
           <div class="cramer-action hold" id="cramerAction">--</div>
           <div class="cramer-tagline" id="cramerTagline">&nbsp;</div>
@@ -1205,13 +1208,15 @@
         const sentData = await sentRes.json();
         const s = sentData.sentiment;
 
+        const card = document.getElementById('cramerCard');
+
         if (!cramer || cramer.totalPicks === 0) {
-          console.log('Cramer: no picks available', cramer);
+          document.getElementById('cramerAction').textContent = '--';
+          document.getElementById('cramerAction').className = 'cramer-action hold';
+          document.getElementById('cramerTagline').textContent = 'Waiting for Cramer data...';
+          document.getElementById('cramerComparison').textContent = '';
           return;
         }
-
-        const card = document.getElementById('cramerCard');
-        card.style.display = 'flex';
 
         // Hash to avoid re-randomizing taglines
         const hash = cramer.recommendation + ':' + cramer.totalPicks + ':' + (s ? s.recommendation : '');

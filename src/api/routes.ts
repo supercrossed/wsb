@@ -12,6 +12,7 @@ import {
   getCramerPicks,
   getSpyChangeByDate,
   getDb,
+  saveHistoricalEntry,
 } from "../services/database";
 import { fetchSpyToday, fetchSpyRealtime } from "../services/spy";
 import { getActiveThreadType } from "../services/reddit";
@@ -113,6 +114,32 @@ router.post("/api/backfill-spy", async (_req: Request, res: Response) => {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     logger.error("Manual SPY backfill failed", { error: message });
+    res.status(500).json({ error: message });
+  }
+});
+
+/**
+ * POST /api/seed-historical
+ * Seeds a specific date's historical entry with sentiment data, then recomputes verdicts.
+ * Body: { date: "YYYY-MM-DD", wsbSentiment: "bullish"|"bearish", inverseRecommendation: "CALLS"|"PUTS"|"HOLD" }
+ */
+router.post("/api/seed-historical", async (req: Request, res: Response) => {
+  try {
+    const { date, wsbSentiment, inverseRecommendation } = req.body as {
+      date: string;
+      wsbSentiment: string;
+      inverseRecommendation: string;
+    };
+    if (!date || !wsbSentiment || !inverseRecommendation) {
+      res.status(400).json({ error: "Missing date, wsbSentiment, or inverseRecommendation" });
+      return;
+    }
+    saveHistoricalEntry(date, wsbSentiment, inverseRecommendation);
+    await backfillSpyPrices();
+    res.json({ success: true, date, wsbSentiment, inverseRecommendation });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error("Seed historical failed", { error: message });
     res.status(500).json({ error: message });
   }
 });

@@ -49,6 +49,19 @@ export interface HistoricalEntry {
   inverseCorrect: boolean | null;
 }
 
+export interface TopPost {
+  id: string;
+  title: string;
+  author: string;
+  score: number;
+  numComments: number;
+  createdUtc: number;
+  permalink: string;
+  sentiment: Sentiment;
+  confidence: number;
+  tickers: string[];
+}
+
 // Future trade bot types
 export interface TradeAccount {
   name: "wsb" | "inverse";

@@ -1,7 +1,7 @@
 import { config } from "../config";
 import { logger } from "../lib/logger";
 import { AppError } from "../lib/app-error";
-import type { RedditComment, ThreadType } from "../types";
+import type { RedditComment, ThreadType, TopPost } from "../types";
 
 const BASE_URL = "https://www.reddit.com";
 const USER_AGENT = config.reddit.userAgent;
@@ -22,6 +22,9 @@ interface RedditListingChild {
     children?: string[];
     parent_id?: string;
     link_id?: string;
+    score?: number;
+    num_comments?: number;
+    permalink?: string;
     replies?: { kind: string; data: { children: RedditListingChild[] } } | "";
   };
 }
@@ -180,6 +183,88 @@ async function fetchMoreChildren(
   }
 
   return allComments;
+}
+
+/**
+ * Fetches top 10 non-stickied posts from WSB (hot).
+ * Returns post metadata including title for sentiment analysis.
+ */
+export async function fetchTopPosts(): Promise<Omit<TopPost, "sentiment" | "confidence" | "tickers">[]> {
+  const url = `${BASE_URL}/r/${config.reddit.subreddit}/hot.json?limit=25`;
+  const listing = await redditFetch<RedditListingResponse>(url);
+
+  const posts: Omit<TopPost, "sentiment" | "confidence" | "tickers">[] = [];
+
+  for (const child of listing.data.children) {
+    const p = child.data;
+    // Skip stickied/mod posts and daily threads
+    if (p.stickied || p.distinguished) continue;
+
+    posts.push({
+      id: p.id,
+      title: p.title ?? "",
+      author: p.author,
+      score: p.score ?? 0,
+      numComments: p.num_comments ?? 0,
+      createdUtc: p.created_utc,
+      permalink: `${BASE_URL}${p.permalink ?? ""}`,
+    });
+
+    if (posts.length >= 10) break;
+  }
+
+  logger.info("Fetched top posts", { count: posts.length });
+  return posts;
+}
+
+/**
+ * Fetches comments from a top post for sentiment analysis.
+ * Lighter than thread fetching — only gets top-sorted comments, no morechildren expansion.
+ */
+export async function fetchPostComments(
+  postId: string,
+  permalink: string,
+): Promise<RedditComment[]> {
+  const comments: RedditComment[] = [];
+
+  const url = `${permalink}.json?limit=200&sort=top`;
+  await delay(REQUEST_DELAY_MS);
+
+  try {
+    const data = await redditFetch<RedditListingResponse[]>(url);
+    if (!data[1]?.data?.children) return comments;
+
+    function processComment(child: RedditListingChild): void {
+      if (child.kind !== "t1") return;
+      const c = child.data;
+      if (!c.body || c.body === "[deleted]" || c.body === "[removed]") return;
+      if (c.author === "AutoModerator" || c.author === "[deleted]") return;
+
+      comments.push({
+        id: c.id,
+        body: c.body,
+        author: c.author,
+        createdUtc: c.created_utc,
+        threadId: postId,
+        threadType: "daily", // stored as daily for simplicity
+      });
+
+      if (c.replies && typeof c.replies === "object" && c.replies.data?.children) {
+        for (const reply of c.replies.data.children) {
+          processComment(reply);
+        }
+      }
+    }
+
+    for (const child of data[1].data.children) {
+      processComment(child);
+    }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn("Failed to fetch post comments", { postId, error: message });
+  }
+
+  return comments;
 }
 
 /**

@@ -5,6 +5,7 @@ import {
   getSentimentHistory,
   getHistoricalComparison,
   getCommentCountSince,
+  getTopPosts,
 } from "../services/database";
 import { getActiveThreadType } from "../services/reddit";
 import { pollAndAnalyze } from "../services/scheduler";
@@ -90,6 +91,24 @@ router.post("/api/poll", async (_req: Request, res: Response) => {
     logger.error("Manual poll failed", { error: message });
     res.status(500).json({ error: message });
   }
+});
+
+/**
+ * GET /api/top-posts
+ * Returns today's top 10 WSB posts with sentiment analysis.
+ */
+router.get("/api/top-posts", (_req: Request, res: Response) => {
+  const now = new Date();
+  const est = new Date(
+    now.toLocaleString("en-US", { timeZone: "America/New_York" }),
+  );
+  const year = est.getFullYear();
+  const month = String(est.getMonth() + 1).padStart(2, "0");
+  const day = String(est.getDate()).padStart(2, "0");
+  const dateStr = `${year}-${month}-${day}`;
+
+  const posts = getTopPosts(dateStr);
+  res.json({ date: dateStr, posts });
 });
 
 /**

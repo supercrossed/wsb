@@ -18,13 +18,15 @@
     "chart.js": "^4.5.1",
     "dotenv": "^16.4.7",
     "express": "^5.2.1",
-    "node-cron": "^4.2.1"
+    "node-cron": "^4.2.1",
+    "sentiment": "^5.0.2"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.6",
     "@types/node": "^25.3.5",
     "@types/node-cron": "^3.0.11",
+    "@types/sentiment": "^5.0.4",
     "eslint": "^10.0.2",
     "prettier": "^3.8.1",
     "ts-node": "^10.9.2",

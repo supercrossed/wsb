@@ -5,16 +5,19 @@ import { logger } from "../lib/logger";
 import {
   findActiveThread,
   fetchThreadComments,
+  fetchTopPosts,
+  fetchPostComments,
   getActiveThreadType,
 } from "./reddit";
 import { analyzeSentiment, getInverseRecommendation } from "./sentiment";
 import {
   saveFullComment,
   saveDailySentiment,
+  saveTopPost,
   getCommentCountSince,
   purgeOldData,
 } from "./database";
-import type { DailySentiment, ThreadType } from "../types";
+import type { DailySentiment, ThreadType, TopPost } from "../types";
 
 let isPolling = false;
 
@@ -103,6 +106,50 @@ async function pollAndAnalyze(): Promise<void> {
         result.tickers,
       );
       if (inserted) newCount++;
+    }
+
+    // Fetch top 10 WSB posts and their comments
+    try {
+      const topPostsRaw = await fetchTopPosts();
+      const dateStr = getTodayDateString();
+
+      for (const post of topPostsRaw) {
+        // Analyze the post title for sentiment
+        const titleResult = analyzeSentiment(post.title);
+        const topPost: TopPost = {
+          ...post,
+          sentiment: titleResult.sentiment,
+          confidence: titleResult.confidence,
+          tickers: titleResult.tickers,
+        };
+        saveTopPost(topPost, dateStr);
+
+        // Fetch and analyze comments from this post
+        const postComments = await fetchPostComments(post.id, post.permalink);
+        for (const comment of postComments) {
+          const result = analyzeSentiment(comment.body);
+          const inserted = saveFullComment(
+            comment.id,
+            comment.body,
+            comment.author,
+            comment.createdUtc,
+            comment.threadId,
+            comment.threadType,
+            result.sentiment,
+            result.confidence,
+            result.tickers,
+          );
+          if (inserted) newCount++;
+        }
+      }
+
+      logger.info("Top posts processed", {
+        posts: topPostsRaw.length,
+        date: dateStr,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.warn("Failed to fetch top posts", { error: message });
     }
 
     // Recompute daily sentiment from all comments in this period

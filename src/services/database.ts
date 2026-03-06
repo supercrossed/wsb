@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs";
 
 import { logger } from "../lib/logger";
-import type { CommentSentiment, DailySentiment, HistoricalEntry, ThreadType } from "../types";
+import type { CommentSentiment, DailySentiment, HistoricalEntry, ThreadType, TopPost } from "../types";
 
 let db: Database.Database;
 
@@ -47,6 +47,24 @@ export function initDatabase(dbPath: string): Database.Database {
       thread_type TEXT NOT NULL,
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS top_posts (
+      id TEXT NOT NULL,
+      date TEXT NOT NULL,
+      title TEXT NOT NULL,
+      author TEXT NOT NULL,
+      score INTEGER NOT NULL,
+      num_comments INTEGER NOT NULL,
+      created_utc INTEGER NOT NULL,
+      permalink TEXT NOT NULL,
+      sentiment TEXT NOT NULL,
+      confidence REAL NOT NULL,
+      tickers TEXT NOT NULL DEFAULT '[]',
+      fetched_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (id, date)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_top_posts_date ON top_posts(date);
 
     CREATE TABLE IF NOT EXISTS historical (
       date TEXT PRIMARY KEY,
@@ -201,10 +219,52 @@ export function getCommentCountSince(sinceUtc: number, threadType?: ThreadType):
   return result;
 }
 
+export function saveTopPost(post: TopPost, date: string): void {
+  const stmt = getDb().prepare(`
+    INSERT OR REPLACE INTO top_posts (id, date, title, author, score, num_comments, created_utc, permalink, sentiment, confidence, tickers, fetched_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+  `);
+  stmt.run(
+    post.id,
+    date,
+    post.title,
+    post.author,
+    post.score,
+    post.numComments,
+    post.createdUtc,
+    post.permalink,
+    post.sentiment,
+    post.confidence,
+    JSON.stringify(post.tickers),
+  );
+}
+
+export function getTopPosts(date: string): TopPost[] {
+  const rows = getDb()
+    .prepare("SELECT * FROM top_posts WHERE date = ? ORDER BY score DESC")
+    .all(date) as Record<string, unknown>[];
+
+  return rows.map((row) => ({
+    id: row.id as string,
+    title: row.title as string,
+    author: row.author as string,
+    score: row.score as number,
+    numComments: row.num_comments as number,
+    createdUtc: row.created_utc as number,
+    permalink: row.permalink as string,
+    sentiment: row.sentiment as TopPost["sentiment"],
+    confidence: row.confidence as number,
+    tickers: JSON.parse(row.tickers as string) as string[],
+  }));
+}
+
 export function purgeOldData(): void {
   // Comments: only keep today and yesterday (for overnight thread analysis)
   const twoDaysAgo = Math.floor(Date.now() / 1000) - 2 * 86400;
   const commentResult = getDb().prepare("DELETE FROM comments WHERE created_utc < ?").run(twoDaysAgo);
+
+  // top_posts: keep 2 days
+  getDb().prepare("DELETE FROM top_posts WHERE date < date('now', '-2 days')").run();
 
   // daily_sentiment: keep 90 days for the dashboard history chart
   getDb()

@@ -5,155 +5,343 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WSB Inverse Sentiment Tracker</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0d1117;
-      --surface: #161b22;
-      --border: #30363d;
+      --bg: #06080d;
+      --surface: #0e1218;
+      --surface-raised: #141a23;
+      --border: #1e2732;
+      --border-glow: rgba(88, 166, 255, 0.2);
       --text: #e6edf3;
-      --text-muted: #8b949e;
-      --green: #3fb950;
-      --red: #f85149;
-      --yellow: #d29922;
+      --text-muted: #6e7a88;
+      --green: #00ff87;
+      --green-dim: rgba(0, 255, 135, 0.12);
+      --red: #ff3b5c;
+      --red-dim: rgba(255, 59, 92, 0.12);
+      --yellow: #ffb800;
+      --yellow-dim: rgba(255, 184, 0, 0.12);
       --blue: #58a6ff;
+      --blue-dim: rgba(88, 166, 255, 0.1);
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
+      overflow-x: hidden;
     }
+
+    /* Animated gradient background */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(ellipse at 20% 50%, rgba(0,255,135,0.03) 0%, transparent 50%),
+                  radial-gradient(ellipse at 80% 20%, rgba(255,59,92,0.03) 0%, transparent 50%),
+                  radial-gradient(ellipse at 50% 80%, rgba(88,166,255,0.02) 0%, transparent 50%);
+      animation: bgShift 20s ease-in-out infinite;
+      z-index: -1;
+      pointer-events: none;
+    }
+    @keyframes bgShift {
+      0%, 100% { transform: translate(0, 0); }
+      33% { transform: translate(-2%, 1%); }
+      66% { transform: translate(1%, -2%); }
+    }
+
     header {
-      background: var(--surface);
+      background: rgba(14, 18, 24, 0.85);
       border-bottom: 1px solid var(--border);
-      padding: 16px 24px;
+      padding: 16px 28px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
-    header h1 { font-size: 1.4rem; font-weight: 600; }
-    header .status {
-      font-size: 0.85rem;
+    header h1 {
+      font-size: 1.3rem;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--green), var(--blue));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .status {
+      font-size: 0.8rem;
       color: var(--text-muted);
       display: flex;
       align-items: center;
       gap: 8px;
+      font-family: 'JetBrains Mono', monospace;
     }
-    header .status .dot {
+    .status .dot {
       width: 8px; height: 8px;
       border-radius: 50%;
       background: var(--green);
       display: inline-block;
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse 2s ease-in-out infinite;
     }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--green); }
+      50% { opacity: 0.5; box-shadow: 0 0 20px var(--green); }
+    }
+
     nav {
-      background: var(--surface);
+      background: rgba(14, 18, 24, 0.85);
       border-bottom: 1px solid var(--border);
-      padding: 0 24px;
+      padding: 0 28px;
       display: flex;
       gap: 0;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
     }
     nav a {
       color: var(--text-muted);
       text-decoration: none;
-      padding: 12px 16px;
-      font-size: 0.9rem;
+      padding: 12px 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
       border-bottom: 2px solid transparent;
-      transition: color 0.2s, border-color 0.2s;
+      transition: all 0.25s;
+      letter-spacing: 0.02em;
     }
     nav a:hover { color: var(--text); }
     nav a.active {
       color: var(--text);
       border-bottom-color: var(--blue);
     }
-    .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-    @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 28px; }
+
+    .grid-main {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    @media (max-width: 768px) {
+      .grid-main { grid-template-columns: 1fr; }
+    }
+
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 24px;
+      border-radius: 16px;
+      padding: 28px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    .card:hover {
+      border-color: var(--border-glow);
+      box-shadow: 0 0 30px rgba(88, 166, 255, 0.04);
     }
     .card h2 {
-      font-size: 1rem;
-      font-weight: 600;
-      margin-bottom: 16px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      margin-bottom: 20px;
       color: var(--text-muted);
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.12em;
     }
+
+    /* Recommendation card */
     .recommendation {
       text-align: center;
-      padding: 32px 24px;
+      padding: 32px 28px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
     }
     .recommendation .action {
-      font-size: 3rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 4.5rem;
       font-weight: 700;
-      margin-bottom: 8px;
+      margin: 16px 0 12px;
+      position: relative;
+      line-height: 1;
     }
-    .recommendation .action.buy { color: var(--green); }
-    .recommendation .action.sell { color: var(--red); }
-    .recommendation .action.hold { color: var(--yellow); }
-    .recommendation .subtitle {
+    .recommendation .action.buy {
+      color: var(--green);
+      text-shadow: 0 0 60px rgba(0,255,135,0.35), 0 0 120px rgba(0,255,135,0.1);
+    }
+    .recommendation .action.sell {
+      color: var(--red);
+      text-shadow: 0 0 60px rgba(255,59,92,0.35), 0 0 120px rgba(255,59,92,0.1);
+    }
+    .recommendation .action.hold {
+      color: var(--yellow);
+      text-shadow: 0 0 60px rgba(255,184,0,0.35), 0 0 120px rgba(255,184,0,0.1);
+    }
+    /* Glow ring behind the action */
+    .recommendation .action::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      opacity: 0.08;
+      z-index: -1;
+    }
+    .recommendation .action.buy::before { background: radial-gradient(circle, var(--green), transparent 70%); opacity: 0.15; }
+    .recommendation .action.sell::before { background: radial-gradient(circle, var(--red), transparent 70%); opacity: 0.15; }
+    .recommendation .action.hold::before { background: radial-gradient(circle, var(--yellow), transparent 70%); opacity: 0.12; }
+
+    .rec-label {
+      font-size: 0.72rem;
+      font-weight: 700;
       color: var(--text-muted);
-      font-size: 0.9rem;
-    }
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
-      margin-top: 16px;
-    }
-    .stat {
-      text-align: center;
-      padding: 12px;
-      border-radius: 6px;
-      background: rgba(255,255,255,0.03);
-    }
-    .stat .value { font-size: 1.5rem; font-weight: 700; }
-    .stat .label { font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; }
-    .stat.bullish .value { color: var(--green); }
-    .stat.bearish .value { color: var(--red); }
-    .stat.neutral .value { color: var(--yellow); }
-    .chart-wrap { position: relative; max-width: 300px; margin: 0 auto; }
-    .thread-badge {
-      display: inline-block;
-      padding: 4px 10px;
-      border-radius: 12px;
-      font-size: 0.75rem;
-      font-weight: 600;
       text-transform: uppercase;
-      margin-bottom: 12px;
+      letter-spacing: 0.12em;
     }
-    .thread-badge.daily { background: rgba(63,185,80,0.15); color: var(--green); }
-    .thread-badge.overnight { background: rgba(88,166,255,0.15); color: var(--blue); }
-    .thread-badge.weekend { background: rgba(210,153,34,0.15); color: var(--yellow); }
+    .rec-explanation {
+      margin-top: 8px;
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      max-width: 280px;
+      line-height: 1.5;
+    }
+
+    /* Sentiment bar */
+    .sentiment-bar-wrap {
+      margin-top: 24px;
+    }
+    .sentiment-bar-labels {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+    .sentiment-bar-labels .bull { color: var(--green); }
+    .sentiment-bar-labels .bear { color: var(--red); }
+    .sentiment-bar {
+      height: 10px;
+      border-radius: 5px;
+      background: var(--red);
+      overflow: hidden;
+      position: relative;
+    }
+    .sentiment-bar .fill {
+      height: 100%;
+      border-radius: 5px;
+      background: linear-gradient(90deg, #00cc6a, var(--green));
+      transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+    }
+    .sentiment-bar .fill::after {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(180deg, rgba(255,255,255,0.15), transparent);
+      border-radius: 5px;
+    }
+
     .meta-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 16px;
     }
-    .total-comments { color: var(--text-muted); font-size: 0.85rem; }
+    .total-comments {
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      font-family: 'JetBrains Mono', monospace;
+      text-align: center;
+      margin-top: 18px;
+    }
+    .total-comments span {
+      color: var(--blue);
+      font-weight: 700;
+    }
+
+    .thread-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .thread-badge.daily { background: var(--green-dim); color: var(--green); }
+    .thread-badge.overnight { background: var(--blue-dim); color: var(--blue); }
+    .thread-badge.weekend { background: var(--yellow-dim); color: var(--yellow); }
+
+    .chart-wrap {
+      position: relative;
+      max-width: 200px;
+      margin: 0 auto 8px;
+    }
+
+    /* Stat pills */
+    .stats-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+      justify-content: center;
+    }
+    .stat-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+    .stat-pill.bullish { background: var(--green-dim); color: var(--green); }
+    .stat-pill.bearish { background: var(--red-dim); color: var(--red); }
+    .stat-pill .stat-label {
+      font-weight: 500;
+      font-size: 0.68rem;
+      opacity: 0.7;
+    }
+
     .page { display: none; }
     .page.active { display: block; }
     .history-chart-wrap { height: 350px; }
-    .updated { color: var(--text-muted); font-size: 0.8rem; text-align: center; margin-top: 16px; }
+    .updated {
+      color: var(--text-muted);
+      font-size: 0.72rem;
+      text-align: center;
+      margin-top: 24px;
+      font-family: 'JetBrains Mono', monospace;
+    }
     .no-data {
       text-align: center;
       color: var(--text-muted);
       padding: 48px 24px;
-      font-size: 1rem;
+      font-size: 0.9rem;
     }
   </style>
 </head>
 <body>
   <header>
-    <h1>WSB Inverse Tracker</h1>
+    <h1>WSB INVERSE TRACKER</h1>
     <div class="status">
       <span class="dot" id="statusDot"></span>
-      <span id="statusText">Connecting...</span>
+      <span id="statusText">CONNECTING...</span>
     </div>
   </header>
   <nav>
@@ -164,40 +352,45 @@
   <!-- Dashboard Page -->
   <div class="page active" id="page-dashboard">
     <div class="container">
-      <div class="grid">
+      <div class="grid-main">
+        <!-- Sentiment Card -->
         <div class="card">
           <div class="meta-row">
             <h2>WSB Sentiment</h2>
-            <span class="thread-badge daily" id="threadBadge">daily</span>
+            <span class="thread-badge daily" id="threadBadge">DAILY</span>
           </div>
           <div class="chart-wrap">
             <canvas id="sentimentPie"></canvas>
           </div>
-          <div class="stats">
-            <div class="stat bullish">
-              <div class="value" id="bullishPct">--</div>
-              <div class="label">Bullish</div>
+          <div class="stats-row">
+            <div class="stat-pill bullish">
+              <span id="bullishPct">--</span>
+              <span class="stat-label">BULL</span>
             </div>
-            <div class="stat bearish">
-              <div class="value" id="bearishPct">--</div>
-              <div class="label">Bearish</div>
-            </div>
-            <div class="stat neutral">
-              <div class="value" id="neutralPct">--</div>
-              <div class="label">Neutral</div>
+            <div class="stat-pill bearish">
+              <span id="bearishPct">--</span>
+              <span class="stat-label">BEAR</span>
             </div>
           </div>
-          <div class="total-comments" style="text-align:center; margin-top:12px;">
+          <div class="sentiment-bar-wrap">
+            <div class="sentiment-bar-labels">
+              <span class="bull" id="barBullLabel">0%</span>
+              <span class="bear" id="barBearLabel">0%</span>
+            </div>
+            <div class="sentiment-bar">
+              <div class="fill" id="sentimentFill" style="width:50%"></div>
+            </div>
+          </div>
+          <div class="total-comments">
             <span id="totalComments">0</span> comments analyzed
           </div>
         </div>
+
+        <!-- Recommendation Card -->
         <div class="card recommendation">
-          <h2>Inverse Recommendation</h2>
-          <div class="subtitle" style="margin-bottom:24px;">
-            Do the OPPOSITE of what WSB says
-          </div>
+          <div class="rec-label">Inverse Recommendation</div>
           <div class="action hold" id="recommendation">--</div>
-          <div class="subtitle" id="recExplanation">Waiting for data...</div>
+          <div class="rec-explanation" id="recExplanation">Waiting for data...</div>
         </div>
       </div>
       <div class="updated" id="lastUpdated"></div>
@@ -213,7 +406,7 @@
           <canvas id="historyChart"></canvas>
         </div>
       </div>
-      <div class="card" style="margin-top:24px;">
+      <div class="card" style="margin-top:20px;">
         <h2>Inverse Strategy Accuracy</h2>
         <div class="history-chart-wrap">
           <canvas id="accuracyChart"></canvas>
@@ -245,30 +438,47 @@
         const res = await fetch('/api/sentiment/today');
         const data = await res.json();
 
-        document.getElementById('statusDot').style.background = '#3fb950';
-        document.getElementById('statusText').textContent = 'Live';
+        document.getElementById('statusDot').style.background = '#00ff87';
+        document.getElementById('statusText').textContent = 'LIVE';
 
         const badge = document.getElementById('threadBadge');
-        badge.textContent = data.threadType;
+        badge.textContent = data.threadType.toUpperCase();
         badge.className = 'thread-badge ' + data.threadType;
 
         if (!data.sentiment) {
           document.getElementById('bullishPct').textContent = '--';
           document.getElementById('bearishPct').textContent = '--';
-          document.getElementById('neutralPct').textContent = '--';
           document.getElementById('totalComments').textContent = '0';
-          document.getElementById('recommendation').textContent = 'WAITING';
+          document.getElementById('recommendation').textContent = 'WAIT';
           document.getElementById('recommendation').className = 'action hold';
-          document.getElementById('recExplanation').textContent = 'No data yet. Waiting for comments...';
-          updatePieChart(0, 0, 0);
+          document.getElementById('recExplanation').textContent = 'Collecting data from WSB...';
+          document.getElementById('sentimentFill').style.width = '50%';
+          document.getElementById('barBullLabel').textContent = '0%';
+          document.getElementById('barBearLabel').textContent = '0%';
+          updatePieChart(0, 0);
           return;
         }
 
         const s = data.sentiment;
-        document.getElementById('bullishPct').textContent = s.bullishPercent.toFixed(1) + '%';
-        document.getElementById('bearishPct').textContent = s.bearishPercent.toFixed(1) + '%';
-        document.getElementById('neutralPct').textContent = s.neutralPercent.toFixed(1) + '%';
+        // Recalculate bullish vs bearish only (exclude neutral)
+        const bullBearTotal = s.bullishCount + s.bearishCount;
+        let bullPct, bearPct;
+        if (bullBearTotal === 0) {
+          bullPct = 50;
+          bearPct = 50;
+        } else {
+          bullPct = Math.round((s.bullishCount / bullBearTotal) * 10000) / 100;
+          bearPct = Math.round((s.bearishCount / bullBearTotal) * 10000) / 100;
+        }
+
+        document.getElementById('bullishPct').textContent = bullPct.toFixed(1) + '%';
+        document.getElementById('bearishPct').textContent = bearPct.toFixed(1) + '%';
         document.getElementById('totalComments').textContent = s.totalComments.toLocaleString();
+
+        // Sentiment bar
+        document.getElementById('sentimentFill').style.width = bullPct + '%';
+        document.getElementById('barBullLabel').textContent = bullPct.toFixed(1) + '%';
+        document.getElementById('barBearLabel').textContent = bearPct.toFixed(1) + '%';
 
         const rec = s.recommendation;
         const recEl = document.getElementById('recommendation');
@@ -276,25 +486,25 @@
         recEl.className = 'action ' + rec.toLowerCase();
 
         const explanations = {
-          BUY: 'WSB is bearish. Inverse says BUY SPY.',
-          SELL: 'WSB is bullish. Inverse says SELL/SHORT SPY.',
-          HOLD: 'Sentiment is mixed. No strong signal.'
+          BUY: 'WSB is bearish \u2014 inverse says BUY SPY',
+          SELL: 'WSB is bullish \u2014 inverse says SELL SPY',
+          HOLD: 'No strong signal \u2014 sentiment is mixed'
         };
         document.getElementById('recExplanation').textContent = explanations[rec];
 
-        updatePieChart(s.bullishPercent, s.bearishPercent, s.neutralPercent);
-        document.getElementById('lastUpdated').textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+        updatePieChart(bullPct, bearPct);
+        document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
       } catch {
-        document.getElementById('statusDot').style.background = '#f85149';
-        document.getElementById('statusText').textContent = 'Error';
+        document.getElementById('statusDot').style.background = '#ff3b5c';
+        document.getElementById('statusText').textContent = 'ERROR';
       }
     }
 
-    function updatePieChart(bullish, bearish, neutral) {
+    function updatePieChart(bullish, bearish) {
       const ctx = document.getElementById('sentimentPie').getContext('2d');
 
       if (pieChart) {
-        pieChart.data.datasets[0].data = [bullish, bearish, neutral];
+        pieChart.data.datasets[0].data = [bullish, bearish];
         pieChart.update();
         return;
       }
@@ -302,22 +512,46 @@
       pieChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
-          labels: ['Bullish', 'Bearish', 'Neutral'],
+          labels: ['Bullish', 'Bearish'],
           datasets: [{
-            data: [bullish, bearish, neutral],
-            backgroundColor: ['#3fb950', '#f85149', '#d29922'],
-            borderColor: '#161b22',
-            borderWidth: 3,
+            data: [bullish, bearish],
+            backgroundColor: [
+              'rgba(0, 255, 135, 0.85)',
+              'rgba(255, 59, 92, 0.85)',
+            ],
+            borderColor: 'transparent',
+            borderWidth: 0,
+            hoverBackgroundColor: ['#00ff87', '#ff3b5c'],
+            spacing: 4,
           }]
         },
         options: {
           responsive: true,
-          cutout: '60%',
+          cutout: '72%',
           plugins: {
             legend: {
               display: true,
               position: 'bottom',
-              labels: { color: '#8b949e', padding: 16, font: { size: 12 } }
+              labels: {
+                color: '#6e7a88',
+                padding: 16,
+                font: { size: 11, family: 'JetBrains Mono', weight: '500' },
+                usePointStyle: true,
+                pointStyleWidth: 8,
+              }
+            },
+            tooltip: {
+              backgroundColor: '#141a23',
+              borderColor: '#1e2732',
+              borderWidth: 1,
+              cornerRadius: 8,
+              titleFont: { family: 'JetBrains Mono', size: 12 },
+              bodyFont: { family: 'JetBrains Mono', size: 11 },
+              callbacks: {
+                label: function(ctx) {
+                  return ' ' + ctx.label + ': ' + ctx.parsed.toFixed(1) + '%';
+                }
+              }
             }
           }
         }
@@ -336,7 +570,7 @@
         renderHistoryChart(sentData.entries);
         renderAccuracyChart(histData.entries);
       } catch {
-        /* silently fail for now */
+        /* silently fail */
       }
     }
 
@@ -345,7 +579,7 @@
       if (historyChartInstance) historyChartInstance.destroy();
 
       if (!entries.length) {
-        ctx.canvas.parentElement.innerHTML = '<div class="no-data">No historical data yet. Check back after a few days of data collection.</div>';
+        ctx.canvas.parentElement.innerHTML = '<div class="no-data">No historical data yet. Check back after a few days.</div>';
         return;
       }
 
@@ -357,30 +591,47 @@
             {
               label: 'Bullish %',
               data: entries.map(e => e.bullishPercent),
-              borderColor: '#3fb950',
-              backgroundColor: 'rgba(63,185,80,0.1)',
+              borderColor: '#00ff87',
+              backgroundColor: 'rgba(0,255,135,0.06)',
               fill: true,
-              tension: 0.3,
+              tension: 0.4,
+              borderWidth: 2,
+              pointRadius: 0,
+              pointHoverRadius: 5,
+              pointHoverBackgroundColor: '#00ff87',
             },
             {
               label: 'Bearish %',
               data: entries.map(e => e.bearishPercent),
-              borderColor: '#f85149',
-              backgroundColor: 'rgba(248,81,73,0.1)',
+              borderColor: '#ff3b5c',
+              backgroundColor: 'rgba(255,59,92,0.06)',
               fill: true,
-              tension: 0.3,
+              tension: 0.4,
+              borderWidth: 2,
+              pointRadius: 0,
+              pointHoverRadius: 5,
+              pointHoverBackgroundColor: '#ff3b5c',
             }
           ]
         },
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          interaction: { intersect: false, mode: 'index' },
           scales: {
-            x: { ticks: { color: '#8b949e', maxTicksLimit: 15 }, grid: { color: '#21262d' } },
-            y: { ticks: { color: '#8b949e' }, grid: { color: '#21262d' }, min: 0, max: 100 }
+            x: { ticks: { color: '#6e7a88', maxTicksLimit: 12, font: { size: 10, family: 'JetBrains Mono' } }, grid: { color: 'rgba(30,39,50,0.6)' } },
+            y: { ticks: { color: '#6e7a88', font: { size: 10, family: 'JetBrains Mono' } }, grid: { color: 'rgba(30,39,50,0.6)' }, min: 0, max: 100 }
           },
           plugins: {
-            legend: { labels: { color: '#8b949e' } }
+            legend: { labels: { color: '#6e7a88', font: { size: 11, family: 'JetBrains Mono' }, usePointStyle: true, pointStyleWidth: 8 } },
+            tooltip: {
+              backgroundColor: '#141a23',
+              borderColor: '#1e2732',
+              borderWidth: 1,
+              cornerRadius: 8,
+              titleFont: { family: 'JetBrains Mono', size: 11 },
+              bodyFont: { family: 'JetBrains Mono', size: 11 },
+            }
           }
         }
       });
@@ -393,7 +644,7 @@
       const withOutcome = entries.filter(e => e.inverseCorrect !== null);
 
       if (!withOutcome.length) {
-        ctx.canvas.parentElement.innerHTML = '<div class="no-data">No outcome data yet. SPY price data will populate as trading days pass.</div>';
+        ctx.canvas.parentElement.innerHTML = '<div class="no-data">No outcome data yet. SPY data populates as trading days pass.</div>';
         return;
       }
 
@@ -414,16 +665,24 @@
               label: 'Inverse Accuracy %',
               data: accuracyData.map(d => d.accuracy),
               borderColor: '#58a6ff',
-              backgroundColor: 'rgba(88,166,255,0.1)',
+              backgroundColor: 'rgba(88,166,255,0.06)',
               fill: true,
-              tension: 0.3,
+              tension: 0.4,
+              borderWidth: 2,
+              pointRadius: 0,
+              pointHoverRadius: 5,
+              pointHoverBackgroundColor: '#58a6ff',
               yAxisID: 'y',
             },
             {
               label: 'SPY Daily Change %',
               data: spyData.map(d => d.spyChange),
-              borderColor: '#d29922',
-              tension: 0.3,
+              borderColor: '#ffb800',
+              tension: 0.4,
+              borderWidth: 2,
+              pointRadius: 0,
+              pointHoverRadius: 5,
+              pointHoverBackgroundColor: '#ffb800',
               yAxisID: 'y1',
             }
           ]
@@ -431,19 +690,28 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          interaction: { intersect: false, mode: 'index' },
           scales: {
-            x: { ticks: { color: '#8b949e', maxTicksLimit: 15 }, grid: { color: '#21262d' } },
-            y: { position: 'left', ticks: { color: '#58a6ff' }, grid: { color: '#21262d' }, min: 0, max: 100 },
-            y1: { position: 'right', ticks: { color: '#d29922' }, grid: { display: false } }
+            x: { ticks: { color: '#6e7a88', maxTicksLimit: 12, font: { size: 10, family: 'JetBrains Mono' } }, grid: { color: 'rgba(30,39,50,0.6)' } },
+            y: { position: 'left', ticks: { color: '#58a6ff', font: { size: 10, family: 'JetBrains Mono' } }, grid: { color: 'rgba(30,39,50,0.6)' }, min: 0, max: 100 },
+            y1: { position: 'right', ticks: { color: '#ffb800', font: { size: 10, family: 'JetBrains Mono' } }, grid: { display: false } }
           },
           plugins: {
-            legend: { labels: { color: '#8b949e' } }
+            legend: { labels: { color: '#6e7a88', font: { size: 11, family: 'JetBrains Mono' }, usePointStyle: true, pointStyleWidth: 8 } },
+            tooltip: {
+              backgroundColor: '#141a23',
+              borderColor: '#1e2732',
+              borderWidth: 1,
+              cornerRadius: 8,
+              titleFont: { family: 'JetBrains Mono', size: 11 },
+              bodyFont: { family: 'JetBrains Mono', size: 11 },
+            }
           }
         }
       });
     }
 
-    // Poll every 30 seconds for live updates
+    // Initial fetch + polling
     fetchSentiment();
     setInterval(fetchSentiment, 30000);
   </script>

@@ -13,6 +13,7 @@ import {
 import { fetchSpyToday, fetchSpyRealtime } from "../services/spy";
 import { getActiveThreadType } from "../services/reddit";
 import { computeCramerIndex } from "../services/cramer";
+import { getInverseRecommendation } from "../services/sentiment";
 import { pollAndAnalyze, getTradingDateString } from "../services/scheduler";
 import { logger } from "../lib/logger";
 import { config } from "../config";
@@ -27,6 +28,14 @@ router.get("/api/sentiment/today", (_req: Request, res: Response) => {
   const tradingDate = getTradingDateString();
   const sentiment = getTodaySentiment(tradingDate);
   const threadType = getActiveThreadType();
+
+  // Recalculate recommendation live from current percentages
+  if (sentiment) {
+    sentiment.recommendation = getInverseRecommendation(
+      sentiment.bullishPercent,
+      sentiment.bearishPercent,
+    );
+  }
 
   res.json({
     date: tradingDate,

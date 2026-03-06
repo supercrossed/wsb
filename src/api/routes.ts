@@ -17,7 +17,7 @@ import { fetchSpyToday, fetchSpyRealtime } from "../services/spy";
 import { getActiveThreadType } from "../services/reddit";
 import { computeCramerIndex } from "../services/cramer";
 import { getInverseRecommendation } from "../services/sentiment";
-import { pollAndAnalyze, getTradingDateString } from "../services/scheduler";
+import { pollAndAnalyze, backfillSpyPrices, getTradingDateString } from "../services/scheduler";
 import { logger } from "../lib/logger";
 import { config } from "../config";
 
@@ -98,6 +98,21 @@ router.post("/api/poll", async (_req: Request, res: Response) => {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     logger.error("Manual poll failed", { error: message });
+    res.status(500).json({ error: message });
+  }
+});
+
+/**
+ * POST /api/backfill-spy
+ * Manually triggers SPY price backfill and recomputes inverse_correct verdicts.
+ */
+router.post("/api/backfill-spy", async (_req: Request, res: Response) => {
+  try {
+    await backfillSpyPrices();
+    res.json({ success: true });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error("Manual SPY backfill failed", { error: message });
     res.status(500).json({ error: message });
   }
 });

@@ -369,4 +369,4 @@ async function backfillSpyPrices(): Promise<void> {
 }
 
 // Allow manual trigger for API
-export { pollAndAnalyze };
+export { pollAndAnalyze, backfillSpyPrices };

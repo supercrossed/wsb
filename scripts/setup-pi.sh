@@ -54,7 +54,7 @@ fi
 echo "$(date -Iseconds) Update found: $LOCAL -> $REMOTE"
 
 git pull origin master --quiet
-npm install --omit=dev --quiet
+npm install --quiet
 npm run build --quiet
 
 sudo systemctl restart wsb

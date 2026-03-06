@@ -227,7 +227,7 @@ export async function fetchCnbcCramerPicks(): Promise<CramerPick[]> {
       } else {
         // General market commentary — still counts for overall index
         picks.push({
-          ticker: "MARKET",
+          ticker: "CRAMER",
           direction,
           rawDirection: direction,
           date,
@@ -360,10 +360,10 @@ export function computeCramerIndex(picks: CramerPick[]): CramerIndex {
   if (bullishCount > bearishCount) overallDirection = "bullish";
   else if (bearishCount > bullishCount) overallDirection = "bearish";
 
-  // Cramer's recommendation (what Cramer would say)
+  // Inverse Cramer: if Cramer is bullish, buy puts. If bearish, buy calls.
   let recommendation: "CALLS" | "PUTS" | "HOLD" = "HOLD";
-  if (overallDirection === "bullish") recommendation = "CALLS";
-  else if (overallDirection === "bearish") recommendation = "PUTS";
+  if (overallDirection === "bullish") recommendation = "PUTS";
+  else if (overallDirection === "bearish") recommendation = "CALLS";
 
   return {
     bullishCount,

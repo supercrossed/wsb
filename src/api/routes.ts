@@ -8,6 +8,7 @@ import {
   getTopPosts,
   getRecentOutcomes,
   getCramerPicks,
+  getSpyChangeByDate,
 } from "../services/database";
 import { fetchSpyToday, fetchSpyRealtime } from "../services/spy";
 import { getActiveThreadType } from "../services/reddit";
@@ -211,7 +212,24 @@ router.get("/api/spy/history", (req: Request, res: Response) => {
 router.get("/api/cramer", (_req: Request, res: Response) => {
   const picks = getCramerPicks(30);
   const index = computeCramerIndex(picks);
-  res.json(index);
+
+  // Attach SPY change data to recent picks for RIGHT/WRONG verdict
+  const spyData = getSpyChangeByDate();
+  const recentWithVerdict = index.recentPicks.map((pick) => {
+    const spy = spyData[pick.date];
+    let verdict: string | null = null;
+    if (spy !== undefined && spy !== null) {
+      // Cramer bullish + SPY up = Cramer was right; Cramer bearish + SPY down = right
+      const spyUp = spy > 0;
+      const cramerRight =
+        (pick.direction === "bullish" && spyUp) ||
+        (pick.direction === "bearish" && !spyUp);
+      verdict = pick.direction === "neutral" ? null : (cramerRight ? "RIGHT" : "WRONG");
+    }
+    return { ...pick, spyChange: spy ?? null, verdict };
+  });
+
+  res.json({ ...index, recentPicks: recentWithVerdict });
 });
 
 export { router };

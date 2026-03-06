@@ -447,3 +447,15 @@ export function getCramerPicks(days: number = 7): CramerPick[] {
     title: row.title as string,
   }));
 }
+
+export function getSpyChangeByDate(): Record<string, number | null> {
+  const rows = getDb()
+    .prepare("SELECT date, spy_change FROM historical WHERE spy_change IS NOT NULL ORDER BY date DESC LIMIT 90")
+    .all() as { date: string; spy_change: number | null }[];
+
+  const map: Record<string, number | null> = {};
+  for (const row of rows) {
+    map[row.date] = row.spy_change;
+  }
+  return map;
+}

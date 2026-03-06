@@ -261,24 +261,39 @@
     }
     .cramer-action {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 3.5rem;
+      font-size: 4.5rem;
       font-weight: 700;
-      margin: 12px 0 8px;
+      margin: 16px 0 12px;
       line-height: 1;
       position: relative;
     }
     .cramer-action.calls {
       color: var(--green);
-      text-shadow: 0 0 40px rgba(0,255,135,0.25);
+      text-shadow: 0 0 60px rgba(0,255,135,0.35), 0 0 120px rgba(0,255,135,0.1);
     }
     .cramer-action.puts {
       color: var(--red);
-      text-shadow: 0 0 40px rgba(255,59,92,0.25);
+      text-shadow: 0 0 60px rgba(255,59,92,0.35), 0 0 120px rgba(255,59,92,0.1);
     }
     .cramer-action.hold {
       color: var(--yellow);
-      text-shadow: 0 0 40px rgba(255,184,0,0.25);
+      text-shadow: 0 0 60px rgba(255,184,0,0.35), 0 0 120px rgba(255,184,0,0.1);
     }
+    .cramer-action::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      opacity: 0.08;
+      z-index: -1;
+    }
+    .cramer-action.calls::before { background: radial-gradient(circle, var(--green), transparent 70%); opacity: 0.15; }
+    .cramer-action.puts::before { background: radial-gradient(circle, var(--red), transparent 70%); opacity: 0.15; }
+    .cramer-action.hold::before { background: radial-gradient(circle, var(--yellow), transparent 70%); opacity: 0.12; }
     .cramer-tagline {
       font-size: 0.88rem;
       font-weight: 600;
@@ -286,8 +301,9 @@
       margin-bottom: 12px;
       min-height: 1.4em;
     }
-    .cramer-tagline.agree { color: var(--yellow); }
-    .cramer-tagline.disagree { color: var(--text); }
+    .cramer-tagline.calls { color: var(--green); }
+    .cramer-tagline.puts { color: var(--red); }
+    .cramer-tagline.hold { color: var(--yellow); }
     .cramer-comparison {
       font-size: 0.82rem;
       color: var(--text-muted);
@@ -314,14 +330,20 @@
     }
     .cramer-pick-row {
       display: flex;
-      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
       padding: 3px 0;
       border-bottom: 1px solid rgba(30,39,50,0.4);
     }
-    .cramer-pick-ticker { color: var(--accent); font-weight: 700; }
+    .cramer-pick-ticker { color: var(--blue); font-weight: 700; min-width: 55px; }
     .cramer-pick-dir.bullish { color: var(--green); }
     .cramer-pick-dir.bearish { color: var(--red); }
     .cramer-pick-dir.neutral { color: var(--text-muted); }
+    .cramer-pick-date { color: var(--text-muted); flex: 1; }
+    .cramer-verdict { font-weight: 700; font-size: 0.7rem; text-transform: uppercase; }
+    .cramer-verdict.right { color: var(--green); }
+    .cramer-verdict.wrong { color: var(--red); }
+    .cramer-verdict.pending { color: var(--text-muted); }
 
     /* Sentiment bar */
     .sentiment-bar-wrap {
@@ -612,15 +634,15 @@
 
         <!-- Cramer Index Card -->
         <div class="card cramer-card" id="cramerCard">
-          <div class="cramer-label">Cramer Index</div>
+          <div class="cramer-label">Inverse Cramer</div>
+          <div class="cramer-tagline hold" id="cramerTagline">&nbsp;</div>
           <div class="cramer-action hold" id="cramerAction">--</div>
-          <div class="cramer-tagline" id="cramerTagline">&nbsp;</div>
+          <div class="cramer-comparison" id="cramerComparison"></div>
           <div class="cramer-picks-summary">
             <span class="bulls" id="cramerBulls">0 bullish</span>
             <span class="bears" id="cramerBears">0 bearish</span>
             <span class="neutrals" id="cramerNeutrals">0 neutral</span>
           </div>
-          <div class="cramer-comparison" id="cramerComparison"></div>
           <div class="cramer-recent" id="cramerRecent"></div>
         </div>
       </div>
@@ -1231,55 +1253,43 @@
         document.getElementById('cramerBears').textContent = cramer.bearishCount + ' bearish';
         document.getElementById('cramerNeutrals').textContent = cramer.neutralCount + ' neutral';
 
-        // WSB vs Cramer comparison
+        // Inverse Cramer taglines (same style as WSB inverse card)
         const taglineEl = document.getElementById('cramerTagline');
         const compEl = document.getElementById('cramerComparison');
-        const wsbRec = s ? s.recommendation : null;
         const cramerDir = cramer.overallDirection;
-        const wsbBullish = s ? s.bullishPercent > s.bearishPercent : null;
-        const wsbDir = wsbBullish === null ? null : (wsbBullish ? 'bullish' : 'bearish');
+        const rec = cramer.recommendation;
 
-        if (wsbRec && wsbDir) {
-          const agree = (cramerDir === 'bullish' && wsbBullish) || (cramerDir === 'bearish' && !wsbBullish);
+        const taglines = {
+          CALLS: [
+            'Cramer is bearish? Time for calls.',
+            'Inverse Cramer activated. Calls.',
+            'He says sell. We say calls.',
+            'Cramer crying on TV = calls.',
+            'Thanks for the signal, Jim. Calls.',
+          ],
+          PUTS: [
+            'Cramer is pumping? Puts it is.',
+            'He loves it. We buy puts.',
+            'Inverse Cramer says puts.',
+            'Jim\'s excited. That means puts.',
+            'Cramer bullish = guaranteed rug. Puts.',
+          ],
+          HOLD: [
+            'Even Cramer can\'t pick a side.',
+            'Cramer is confused. Join the club.',
+            'No signal from the inverse oracle.',
+          ]
+        };
+        const taglineList = taglines[rec];
+        taglineEl.textContent = taglineList[Math.floor(Math.random() * taglineList.length)];
+        taglineEl.className = 'cramer-tagline ' + rec.toLowerCase();
 
-          if (agree) {
-            const taglines = [
-              'Cramer and WSB agree. This can\'t end well.',
-              'When Cramer and the regards align, run.',
-              'Two wrongs don\'t make a right. Cramer + WSB = max danger.',
-              'Cramer and WSB on the same page? Inverse HARDER.',
-              'Broken clocks synchronized. Panic.',
-            ];
-            taglineEl.textContent = taglines[Math.floor(Math.random() * taglines.length)];
-            taglineEl.className = 'cramer-tagline agree';
-            compEl.textContent = 'Both Cramer (' + cramerDir + ') and WSB (' + wsbDir + ') are aligned. Historically, this is a strong inverse signal.';
-          } else {
-            if (cramerDir === 'neutral') {
-              const taglines = [
-                'Cramer is on the fence. WSB has no such luxury.',
-                'Even Cramer can\'t pick a side today.',
-              ];
-              taglineEl.textContent = taglines[Math.floor(Math.random() * taglines.length)];
-              taglineEl.className = 'cramer-tagline disagree';
-              compEl.textContent = 'Cramer is mixed while WSB leans ' + wsbDir + '. The regards at least committed.';
-            } else {
-              const taglines = [
-                'Cramer and WSB disagree. One of them is right (probably neither).',
-                'Cramer says ' + cramerDir + ', WSB says ' + wsbDir + '. Choose your fighter.',
-                'The unstoppable force of Cramer vs the immovable object of WSB.',
-                'Cramer vs the regards. Place your bets.',
-                'Cramer: ' + cramerDir + '. WSB: ' + wsbDir + '. Markets: confused.',
-              ];
-              taglineEl.textContent = taglines[Math.floor(Math.random() * taglines.length)];
-              taglineEl.className = 'cramer-tagline disagree';
-              compEl.textContent = 'Cramer leans ' + cramerDir + ' while WSB leans ' + wsbDir + '. When they disagree, follow the inverse of whoever has the worse track record.';
-            }
-          }
-        } else {
-          taglineEl.textContent = 'Cramer has spoken.';
-          taglineEl.className = 'cramer-tagline disagree';
-          compEl.textContent = 'Waiting for WSB sentiment data to compare.';
-        }
+        const explanations = {
+          CALLS: 'Cramer is bearish \u2014 inverse says buy calls on SPY',
+          PUTS: 'Cramer is bullish \u2014 inverse says buy puts on SPY',
+          HOLD: 'No strong signal \u2014 Cramer sentiment is mixed'
+        };
+        compEl.textContent = explanations[rec];
 
         // Recent picks list
         const recentEl = document.getElementById('cramerRecent');
@@ -1288,9 +1298,12 @@
         for (const pick of picks.slice(0, 10)) {
           const row = document.createElement('div');
           row.className = 'cramer-pick-row';
+          const verdictClass = pick.verdict === 'RIGHT' ? 'right' : pick.verdict === 'WRONG' ? 'wrong' : 'pending';
+          const verdictText = pick.verdict || '--';
           row.innerHTML = '<span class="cramer-pick-ticker">' + pick.ticker + '</span>' +
-            '<span class="cramer-pick-dir ' + pick.direction + '">' + pick.rawDirection + '</span>' +
-            '<span style="color:var(--text-muted)">' + pick.date + '</span>';
+            '<span class="cramer-pick-dir ' + pick.direction + '">' + pick.direction + '</span>' +
+            '<span class="cramer-pick-date">' + pick.date + '</span>' +
+            '<span class="cramer-verdict ' + verdictClass + '">' + verdictText + '</span>';
           recentEl.appendChild(row);
         }
       } catch (err) {

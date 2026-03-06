@@ -191,30 +191,29 @@ export async function fetchThreadComments(
   threadType: ThreadType,
 ): Promise<RedditComment[]> {
   try {
-    // Sort by "top" to get the most-replied comments first, which contain
-    // the deepest "more" trees. Limit 500 is the Reddit max per request.
-    const url = `${thread.permalink}?limit=500&sort=confidence`;
-    const data = await redditFetch<RedditListingResponse[]>(url);
-
-    if (!data[1]?.data?.children) {
-      logger.warn("No comments in thread response", { threadId: thread.id });
-      return [];
-    }
-
+    const seenIds = new Set<string>();
     const comments: RedditComment[] = [];
-    const moreIds: string[] = [];
+    const allMoreIds: string[] = [];
 
     function processComment(child: RedditListingChild): void {
       const c = child.data;
 
       // Collect "more" comment IDs for expansion
       if (child.kind === "more" && c.children) {
-        moreIds.push(...c.children);
+        for (const id of c.children) {
+          if (!seenIds.has(id)) {
+            allMoreIds.push(id);
+          }
+        }
         return;
       }
 
       // Skip non-comment nodes
       if (child.kind !== "t1") return;
+
+      // Deduplicate across sort passes
+      if (seenIds.has(c.id)) return;
+      seenIds.add(c.id);
 
       // Skip deleted/removed and bots
       if (!c.body || c.body === "[deleted]" || c.body === "[removed]") return;
@@ -229,7 +228,7 @@ export async function fetchThreadComments(
         threadType,
       });
 
-      // Process nested replies
+      // Process nested replies recursively
       if (
         c.replies &&
         typeof c.replies === "object" &&
@@ -241,18 +240,39 @@ export async function fetchThreadComments(
       }
     }
 
-    for (const child of data[1].data.children) {
-      processComment(child);
+    // Fetch with multiple sort orders to maximize comment coverage.
+    // Each sort surfaces different top-level comments and reply trees.
+    const sorts = ["new", "old", "confidence", "top"];
+
+    for (const sort of sorts) {
+      const url = `${thread.permalink}?limit=500&sort=${sort}`;
+      await delay(REQUEST_DELAY_MS);
+      const data = await redditFetch<RedditListingResponse[]>(url);
+
+      if (!data[1]?.data?.children) continue;
+
+      for (const child of data[1].data.children) {
+        processComment(child);
+      }
+
+      logger.debug("Sort pass complete", {
+        sort,
+        commentsNow: comments.length,
+        moreIdsNow: allMoreIds.length,
+      });
     }
 
-    // Expand "more" comment stubs to get the full thread
-    if (moreIds.length > 0) {
+    // Expand "more" comment stubs to get remaining comments
+    // Deduplicate moreIds before fetching
+    const uniqueMoreIds = allMoreIds.filter((id) => !seenIds.has(id));
+
+    if (uniqueMoreIds.length > 0) {
       logger.info("Expanding more comments", {
-        moreCount: moreIds.length,
+        moreCount: uniqueMoreIds.length,
         threadId: thread.id,
       });
 
-      const moreComments = await fetchMoreChildren(thread.id, moreIds);
+      const moreComments = await fetchMoreChildren(thread.id, uniqueMoreIds);
 
       for (const child of moreComments) {
         processComment(child);

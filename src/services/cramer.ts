@@ -1,3 +1,4 @@
+import Sentiment from "sentiment";
 import { logger } from "../lib/logger";
 import type { CramerPick, CramerIndex } from "../types";
 
@@ -6,49 +7,81 @@ const CNBC_MAD_MONEY_RSS =
 
 const USER_AGENT = "Mozilla/5.0 (compatible; wsb-sentiment-bot/1.0)";
 
-// Direction keywords found in CNBC article titles and QuiverQuant data
-const BULLISH_PATTERNS = [
-  /\bbuy\b/i,
-  /\bbullish\b/i,
-  /\blong\b/i,
-  /\bupgrade/i,
-  /\bgo(ing)?\s+higher/i,
-  /\bopportunity/i,
-  /\bwinner/i,
-  /\bfavorite/i,
-  /\bown(s)?\b/i,
-  /\bstick\s+with/i,
-  /\bstay\s+invested/i,
-  /\bdon'?t\s+give\s+up/i,
-  /\bbuy(ing)?\s+(the\s+)?dip/i,
-  /\bis\s+a\s+buy/i,
-  /\bpick(s)?\b/i,
-  /\bpositive/i,
-  /\brally/i,
-  /\ball\s+in\b/i,
-  /\brecommend(s)?\b/i,
-  /\bbet\s+on/i,
-];
+// Cramer-specific sentiment analyzer
+const cramerAnalyzer = new Sentiment();
 
-const BEARISH_PATTERNS = [
-  /\bsell\b/i,
-  /\bbearish\b/i,
-  /\bshort\b/i,
-  /\bdowngrade/i,
-  /\bavoid/i,
-  /\bstay\s+away/i,
-  /\bwarns?\b/i,
-  /\bdanger/i,
-  /\bcrash/i,
-  /\bfragile/i,
-  /\bfears?\b/i,
-  /\bcaution/i,
-  /\bdire/i,
-  /\brisk/i,
-  /\bapocalypse/i,
-  /\bdon'?t\s+touch/i,
-  /\bnot\s+recommend/i,
-  /\btrim\b/i,
+// Cramer-specific lexicon — words/phrases common in financial headlines
+const CRAMER_LEXICON: Record<string, number> = {
+  // Bullish signals
+  "buy": 4, "buying": 3, "bullish": 4, "long": 3, "upgrade": 3,
+  "opportunity": 3, "winner": 3, "winners": 3, "favorite": 3,
+  "rally": 3, "higher": 2, "upside": 3, "breakout": 3,
+  "benefiting": 2, "benefit": 2, "optimistic": 3, "confident": 2,
+  "recommend": 2, "pick": 2, "picks": 2, "love": 2, "loves": 2,
+  "exciting": 2, "outperform": 3, "beat": 2, "surge": 3,
+  "soaring": 3, "momentum": 2, "growth": 2, "strong": 2,
+  "rebound": 2, "recovery": 2, "comeback": 2, "shrugged": 1,
+
+  // Bearish signals
+  "sell": -4, "selling": -3, "bearish": -4, "short": -3, "downgrade": -3,
+  "avoid": -3, "warns": -3, "warning": -3, "danger": -3, "dangerous": -3,
+  "crash": -4, "crashing": -4, "fragile": -3, "fear": -2, "fears": -2,
+  "caution": -2, "cautious": -2, "dire": -3, "risk": -2, "risky": -2,
+  "apocalypse": -4, "trim": -2, "dump": -3, "dumping": -3,
+  "hurt": -2, "pain": -2, "painful": -2, "plunge": -3, "drop": -2,
+  "falling": -2, "decline": -2, "recession": -3, "trouble": -2,
+  "struggle": -2, "struggles": -2, "selloff": -3, "downturn": -3,
+  "volatile": -1, "volatility": -1, "overvalued": -2, "bubble": -3,
+  "worst": -3, "weak": -2, "weakness": -2,
+
+  // Neutral/hold signals (these reduce magnitude)
+  "limbo": -1, "stuck": -1, "mixed": 0, "hold": 0, "wait": 0,
+  "uncertain": -1, "unclear": -1, "sideways": 0, "flat": 0,
+  "confused": -1, "conflicting": 0,
+};
+
+cramerAnalyzer.registerLanguage("en", { labels: CRAMER_LEXICON });
+
+// Scored phrase patterns for Cramer headlines (more context-aware)
+const CRAMER_PHRASES: Array<{ pattern: RegExp; score: number }> = [
+  // Strong bullish
+  { pattern: /\bdon'?t\s+give\s+up/i, score: 4 },
+  { pattern: /\bstick\s+with/i, score: 3 },
+  { pattern: /\bstay\s+invested/i, score: 3 },
+  { pattern: /\bbuy(ing)?\s+(the\s+)?dip/i, score: 4 },
+  { pattern: /\bis\s+a\s+buy/i, score: 4 },
+  { pattern: /\ball\s+in\b/i, score: 4 },
+  { pattern: /\bgo(ing)?\s+higher/i, score: 3 },
+  { pattern: /\bgo(ing)?\s+much\s+higher/i, score: 4 },
+  { pattern: /\bbuy(ing)?\s+opportunity/i, score: 4 },
+  { pattern: /\bbet\s+on/i, score: 3 },
+  { pattern: /\bmaking?\s+money/i, score: 3 },
+  { pattern: /\bprint(ing)?\s+money/i, score: 3 },
+  { pattern: /\bnot\s+bailing/i, score: 3 },
+  { pattern: /\bnot\s+abandon/i, score: 3 },
+  { pattern: /\bproves?\s+(to\s+be\s+)?a?\s*buying/i, score: 3 },
+  { pattern: /\brenewed\s+.*faith/i, score: 3 },
+  { pattern: /\bcan\s+go\s+higher/i, score: 3 },
+  { pattern: /\bcheat\s+sheet/i, score: 2 },
+  { pattern: /\babsolute\s+favorite/i, score: 4 },
+
+  // Strong bearish
+  { pattern: /\bdon'?t\s+touch/i, score: -4 },
+  { pattern: /\bstay\s+away/i, score: -4 },
+  { pattern: /\bnot\s+recommend/i, score: -3 },
+  { pattern: /\btake\s+profits/i, score: -2 },
+  { pattern: /\bget\s+out/i, score: -3 },
+  { pattern: /\bstuck\s+in\s+limbo/i, score: -2 },
+  { pattern: /\bwild\s+speculation/i, score: -3 },
+  { pattern: /\bprisoners?\s+of\s+pessimism/i, score: -2 },
+  { pattern: /\bdownfall/i, score: -3 },
+  { pattern: /\bbearing?\s+the\s+brunt/i, score: -3 },
+  { pattern: /\bai\s+(apocalypse|fears?|disruption)/i, score: -2 },
+  { pattern: /\bmarket\s+fragile/i, score: -3 },
+
+  // Neutral/hold
+  { pattern: /\bweek\s+ahead/i, score: 0 },
+  { pattern: /\bearnings\s+from/i, score: 0 },
 ];
 
 // QuiverQuant direction mappings
@@ -61,7 +94,7 @@ const QV_BEARISH_DIRS = new Set([
 ]);
 
 /**
- * Classify a direction string into bullish/bearish/neutral.
+ * Classify a direction string into bullish/bearish/neutral using NLP + patterns.
  */
 function classifyDirection(text: string): "bullish" | "bearish" | "neutral" {
   const lower = text.toLowerCase().trim();
@@ -71,19 +104,24 @@ function classifyDirection(text: string): "bullish" | "bearish" | "neutral" {
   if (QV_BEARISH_DIRS.has(lower)) return "bearish";
   if (lower === "hold" || lower === "interview") return "neutral";
 
-  // Pattern-based classification for article titles
-  let bullishScore = 0;
-  let bearishScore = 0;
+  // NLP analysis
+  const nlpResult = cramerAnalyzer.analyze(text);
+  const nlpScore = nlpResult.comparative * 10;
 
-  for (const p of BULLISH_PATTERNS) {
-    if (p.test(text)) bullishScore++;
-  }
-  for (const p of BEARISH_PATTERNS) {
-    if (p.test(text)) bearishScore++;
+  // Phrase pattern scoring
+  let phraseScore = 0;
+  for (const { pattern, score } of CRAMER_PHRASES) {
+    pattern.lastIndex = 0;
+    if (pattern.test(text)) {
+      phraseScore += score;
+    }
   }
 
-  if (bullishScore > bearishScore) return "bullish";
-  if (bearishScore > bullishScore) return "bearish";
+  // Combined score: phrases get higher weight (more specific)
+  const totalScore = nlpScore + (phraseScore * 1.5);
+
+  if (totalScore > 1) return "bullish";
+  if (totalScore < -1) return "bearish";
   return "neutral";
 }
 
@@ -279,28 +317,17 @@ export async function fetchAllCramerPicks(): Promise<CramerPick[]> {
 
 /**
  * Computes the Cramer Index from a set of picks.
- * Only considers today's picks + yesterday's (evening Mad Money = next-day outlook).
+ * Uses the most recent cluster of activity: today + yesterday if available,
+ * otherwise falls back to the most recent 3 days that have any data.
  */
 export function computeCramerIndex(picks: CramerPick[]): CramerIndex {
-  const now = new Date();
-  const est = new Date(
-    now.toLocaleString("en-US", { timeZone: "America/New_York" }),
-  );
-  const year = est.getFullYear();
-  const month = String(est.getMonth() + 1).padStart(2, "0");
-  const day = String(est.getDate()).padStart(2, "0");
-  const today = `${year}-${month}-${day}`;
+  // Sort all picks by date descending
+  const sorted = [...picks].sort((a, b) => b.date.localeCompare(a.date));
 
-  const yesterday = new Date(est);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yYear = yesterday.getFullYear();
-  const yMonth = String(yesterday.getMonth() + 1).padStart(2, "0");
-  const yDay = String(yesterday.getDate()).padStart(2, "0");
-  const yesterdayStr = `${yYear}-${yMonth}-${yDay}`;
+  // Get unique dates, take the most recent 3
+  const uniqueDates = [...new Set(sorted.map((p) => p.date))].slice(0, 3);
 
-  const recentPicks = picks
-    .filter((p) => p.date === today || p.date === yesterdayStr)
-    .sort((a, b) => b.date.localeCompare(a.date));
+  const recentPicks = sorted.filter((p) => uniqueDates.includes(p.date));
 
   const bullishCount = recentPicks.filter((p) => p.direction === "bullish").length;
   const bearishCount = recentPicks.filter((p) => p.direction === "bearish").length;

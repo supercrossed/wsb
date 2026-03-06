@@ -4,6 +4,8 @@ A real-time sentiment analysis tool that monitors r/wallstreetbets and recommend
 
 Runs on an Orange Pi Zero 2 and serves a dashboard on your local network.
 
+![Dashboard](docs/dashboard.png)
+
 ## How It Works
 
 1. **Polls Reddit every 60 seconds** — fetches comments from the active WSB discussion thread (daily, overnight, or weekend) plus the top 10 hot posts and their comments

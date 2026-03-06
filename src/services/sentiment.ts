@@ -244,13 +244,13 @@ export function analyzeSentiment(text: string): SentimentResult {
 export function getInverseRecommendation(
   bullishPercent: number,
   bearishPercent: number,
-): "BUY" | "SELL" | "HOLD" {
-  // Inverse WSB: if WSB is bullish, we sell. If bearish, we buy.
+): "CALLS" | "PUTS" | "HOLD" {
+  // Inverse WSB: if WSB is bullish, we buy puts. If bearish, we buy calls.
   const spread = Math.abs(bullishPercent - bearishPercent);
 
   // Need at least 10% spread to make a directional call
   if (spread < 10) return "HOLD";
 
-  if (bullishPercent > bearishPercent) return "SELL";
-  return "BUY";
+  if (bullishPercent > bearishPercent) return "PUTS";
+  return "CALLS";
 }

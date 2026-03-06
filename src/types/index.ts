@@ -35,7 +35,7 @@ export interface DailySentiment {
   bullishPercent: number;
   bearishPercent: number;
   neutralPercent: number;
-  recommendation: "BUY" | "SELL" | "HOLD";
+  recommendation: "CALLS" | "PUTS" | "HOLD";
   threadType: ThreadType;
 }
 

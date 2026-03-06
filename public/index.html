@@ -173,11 +173,11 @@
       position: relative;
       line-height: 1;
     }
-    .recommendation .action.buy {
+    .recommendation .action.calls {
       color: var(--green);
       text-shadow: 0 0 60px rgba(0,255,135,0.35), 0 0 120px rgba(0,255,135,0.1);
     }
-    .recommendation .action.sell {
+    .recommendation .action.puts {
       color: var(--red);
       text-shadow: 0 0 60px rgba(255,59,92,0.35), 0 0 120px rgba(255,59,92,0.1);
     }
@@ -198,9 +198,20 @@
       opacity: 0.08;
       z-index: -1;
     }
-    .recommendation .action.buy::before { background: radial-gradient(circle, var(--green), transparent 70%); opacity: 0.15; }
-    .recommendation .action.sell::before { background: radial-gradient(circle, var(--red), transparent 70%); opacity: 0.15; }
+    .recommendation .action.calls::before { background: radial-gradient(circle, var(--green), transparent 70%); opacity: 0.15; }
+    .recommendation .action.puts::before { background: radial-gradient(circle, var(--red), transparent 70%); opacity: 0.15; }
     .recommendation .action.hold::before { background: radial-gradient(circle, var(--yellow), transparent 70%); opacity: 0.12; }
+
+    .rec-tagline {
+      font-size: 0.95rem;
+      font-weight: 600;
+      font-style: italic;
+      margin-bottom: 20px;
+      min-height: 1.4em;
+    }
+    .rec-tagline.calls { color: var(--green); }
+    .rec-tagline.puts { color: var(--red); }
+    .rec-tagline.hold { color: var(--yellow); }
 
     .rec-label {
       font-size: 0.72rem;
@@ -389,6 +400,7 @@
         <!-- Recommendation Card -->
         <div class="card recommendation">
           <div class="rec-label">Inverse Recommendation</div>
+          <div class="rec-tagline hold" id="recTagline">&nbsp;</div>
           <div class="action hold" id="recommendation">--</div>
           <div class="rec-explanation" id="recExplanation">Waiting for data...</div>
         </div>
@@ -451,6 +463,8 @@
           document.getElementById('totalComments').textContent = '0';
           document.getElementById('recommendation').textContent = 'WAIT';
           document.getElementById('recommendation').className = 'action hold';
+          document.getElementById('recTagline').textContent = '';
+          document.getElementById('recTagline').className = 'rec-tagline hold';
           document.getElementById('recExplanation').textContent = 'Collecting data from WSB...';
           document.getElementById('sentimentFill').style.width = '50%';
           document.getElementById('barBullLabel').textContent = '0%';
@@ -485,9 +499,36 @@
         recEl.textContent = rec;
         recEl.className = 'action ' + rec.toLowerCase();
 
+        const taglines = {
+          CALLS: [
+            'Believe it or not, calls.',
+            'Bears in shambles. Calls it is.',
+            'WSB says crash? Time for calls.',
+            'Inverse the fear. Load calls.',
+            'They never learn. Calls.',
+          ],
+          PUTS: [
+            'Fucking bulls. Puts it is.',
+            'WSB too greedy. Puts time.',
+            'Euphoria detected. Grab puts.',
+            'They\'re about to learn. Puts.',
+            'Rug pull incoming. Puts.',
+          ],
+          HOLD: [
+            'Too close to call. Sit tight.',
+            'Even the degens are confused.',
+            'No edge here. Hold.',
+          ]
+        };
+        const taglineList = taglines[rec];
+        const tagline = taglineList[Math.floor(Math.random() * taglineList.length)];
+        const taglineEl = document.getElementById('recTagline');
+        taglineEl.textContent = tagline;
+        taglineEl.className = 'rec-tagline ' + rec.toLowerCase();
+
         const explanations = {
-          BUY: 'WSB is bearish \u2014 inverse says BUY SPY',
-          SELL: 'WSB is bullish \u2014 inverse says SELL SPY',
+          CALLS: 'WSB is bearish \u2014 inverse says buy calls on SPY',
+          PUTS: 'WSB is bullish \u2014 inverse says buy puts on SPY',
           HOLD: 'No strong signal \u2014 sentiment is mixed'
         };
         document.getElementById('recExplanation').textContent = explanations[rec];

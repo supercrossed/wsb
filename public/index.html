@@ -1197,11 +1197,18 @@
           fetch('/api/cramer'),
           fetch('/api/sentiment/today'),
         ]);
+        if (!cramerRes.ok) {
+          console.warn('Cramer API returned', cramerRes.status);
+          return;
+        }
         const cramer = await cramerRes.json();
         const sentData = await sentRes.json();
         const s = sentData.sentiment;
 
-        if (!cramer || cramer.totalPicks === 0) return;
+        if (!cramer || cramer.totalPicks === 0) {
+          console.log('Cramer: no picks available', cramer);
+          return;
+        }
 
         const card = document.getElementById('cramerCard');
         card.style.display = 'flex';

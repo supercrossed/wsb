@@ -148,8 +148,27 @@ function extractTickers(text: string): string[] {
  * Parse a simple XML tag value from an RSS item.
  */
 function xmlTag(xml: string, tag: string): string {
-  const match = xml.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>|<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`));
-  return (match?.[1] ?? match?.[2] ?? "").trim();
+  // Try CDATA first: <tag><![CDATA[content]]></tag>
+  const cdataOpen = `<${tag}`;
+  const cdataMarker = "<![CDATA[";
+  const cdataEnd = `]]></${tag}>`;
+  const cdataIdx = xml.indexOf(cdataOpen);
+  if (cdataIdx !== -1) {
+    const markerIdx = xml.indexOf(cdataMarker, cdataIdx);
+    const endIdx = xml.indexOf(cdataEnd, cdataIdx);
+    if (markerIdx !== -1 && endIdx !== -1 && markerIdx < endIdx) {
+      return xml.substring(markerIdx + cdataMarker.length, endIdx).trim();
+    }
+  }
+  // Plain tag: <tag>content</tag>
+  const openRe = new RegExp(`<${tag}[^>]*>`);
+  const openMatch = xml.match(openRe);
+  if (!openMatch) return "";
+  const startIdx = xml.indexOf(openMatch[0]) + openMatch[0].length;
+  const closeTag = `</${tag}>`;
+  const closeIdx = xml.indexOf(closeTag, startIdx);
+  if (closeIdx === -1) return "";
+  return xml.substring(startIdx, closeIdx).trim();
 }
 
 /**

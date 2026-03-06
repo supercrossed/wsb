@@ -12,7 +12,7 @@ import {
 import { fetchSpyToday, fetchSpyRealtime } from "../services/spy";
 import { getActiveThreadType } from "../services/reddit";
 import { computeCramerIndex } from "../services/cramer";
-import { pollAndAnalyze } from "../services/scheduler";
+import { pollAndAnalyze, getTradingDateString } from "../services/scheduler";
 import { logger } from "../lib/logger";
 import { config } from "../config";
 
@@ -23,20 +23,12 @@ const router = Router();
  * Returns today's aggregated sentiment and inverse recommendation.
  */
 router.get("/api/sentiment/today", (_req: Request, res: Response) => {
-  const now = new Date();
-  const est = new Date(
-    now.toLocaleString("en-US", { timeZone: "America/New_York" }),
-  );
-  const year = est.getFullYear();
-  const month = String(est.getMonth() + 1).padStart(2, "0");
-  const day = String(est.getDate()).padStart(2, "0");
-  const dateStr = `${year}-${month}-${day}`;
-
-  const sentiment = getTodaySentiment(dateStr);
+  const tradingDate = getTradingDateString();
+  const sentiment = getTodaySentiment(tradingDate);
   const threadType = getActiveThreadType();
 
   res.json({
-    date: dateStr,
+    date: tradingDate,
     threadType,
     sentiment: sentiment ?? null,
   });
@@ -102,17 +94,9 @@ router.post("/api/poll", async (_req: Request, res: Response) => {
  * Returns today's top 10 WSB posts with sentiment analysis.
  */
 router.get("/api/top-posts", (_req: Request, res: Response) => {
-  const now = new Date();
-  const est = new Date(
-    now.toLocaleString("en-US", { timeZone: "America/New_York" }),
-  );
-  const year = est.getFullYear();
-  const month = String(est.getMonth() + 1).padStart(2, "0");
-  const day = String(est.getDate()).padStart(2, "0");
-  const dateStr = `${year}-${month}-${day}`;
-
-  const posts = getTopPosts(dateStr);
-  res.json({ date: dateStr, posts });
+  const tradingDate = getTradingDateString();
+  const posts = getTopPosts(tradingDate);
+  res.json({ date: tradingDate, posts });
 });
 
 /**
@@ -225,7 +209,7 @@ router.get("/api/spy/history", (req: Request, res: Response) => {
  * plus comparison data for the dashboard.
  */
 router.get("/api/cramer", (_req: Request, res: Response) => {
-  const picks = getCramerPicks(7);
+  const picks = getCramerPicks(30);
   const index = computeCramerIndex(picks);
   res.json(index);
 });

@@ -38,6 +38,52 @@ function getTodayDateString(): string {
 }
 
 /**
+ * Returns the trading date that the current sentiment should apply to.
+ * Before 4 PM EST: today's date (sentiment for today's trading session).
+ * After 4 PM EST: the next trading day's date (overnight sentiment feeds into next day).
+ * Handles weekends: Friday after 4 PM → Monday, Saturday/Sunday → Monday.
+ */
+export function getTradingDateString(): string {
+  const now = new Date();
+  const est = new Date(
+    now.toLocaleString("en-US", { timeZone: "America/New_York" }),
+  );
+  const hour = est.getHours();
+  const day = est.getDay(); // 0=Sun, 6=Sat
+
+  // Before 4 PM on a weekday: sentiment is for today
+  if (day >= 1 && day <= 5 && hour < 16) {
+    return formatDate(est);
+  }
+
+  // After 4 PM or weekend: advance to next trading day
+  const next = new Date(est);
+
+  if (day >= 1 && day <= 4 && hour >= 16) {
+    // Mon-Thu after 4 PM → next day
+    next.setDate(next.getDate() + 1);
+  } else if (day === 5 && hour >= 16) {
+    // Friday after 4 PM → Monday
+    next.setDate(next.getDate() + 3);
+  } else if (day === 6) {
+    // Saturday → Monday
+    next.setDate(next.getDate() + 2);
+  } else if (day === 0) {
+    // Sunday → Monday
+    next.setDate(next.getDate() + 1);
+  }
+
+  return formatDate(next);
+}
+
+function formatDate(d: Date): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
  * Returns the UTC timestamp for the start of the current thread's active period.
  */
 function getThreadStartUtc(threadType: ThreadType): number {
@@ -116,7 +162,7 @@ async function pollAndAnalyze(): Promise<void> {
     // Fetch top 10 WSB posts and their comments
     try {
       const topPostsRaw = await fetchTopPosts();
-      const dateStr = getTodayDateString();
+      const dateStr = getTradingDateString();
 
       for (const post of topPostsRaw) {
         // Analyze the post title for sentiment
@@ -174,8 +220,10 @@ async function pollAndAnalyze(): Promise<void> {
       bearishPercent,
     );
 
+    const tradingDate = getTradingDateString();
+
     const dailySentiment: DailySentiment = {
-      date: getTodayDateString(),
+      date: tradingDate,
       bullishCount: counts.bullish,
       bearishCount: counts.bearish,
       neutralCount: counts.neutral,
@@ -191,7 +239,7 @@ async function pollAndAnalyze(): Promise<void> {
 
     // Save historical entry for inverse strategy tracking
     const wsbSentiment = bullishPercent > bearishPercent ? "bullish" : "bearish";
-    saveHistoricalEntry(getTodayDateString(), wsbSentiment, recommendation);
+    saveHistoricalEntry(tradingDate, wsbSentiment, recommendation);
 
     logger.info("Poll complete", {
       fetched: comments.length,
@@ -239,6 +287,16 @@ export function startScheduler(): void {
     fetchCramerData();
   }, 2 * 60 * 60 * 1000);
 
+  // Finalize daily sentiment at 4 PM EST (market close).
+  // After this point, pollAndAnalyze() writes to the next trading day.
+  cron.schedule(
+    "0 16 * * 1-5",
+    () => {
+      finalizeDaySentiment();
+    },
+    { timezone: "America/New_York" },
+  );
+
   // Also fetch Cramer picks at 8 PM EST (after Mad Money airs at 6 PM)
   cron.schedule(
     "0 20 * * 1-5",
@@ -258,6 +316,25 @@ export function startScheduler(): void {
   );
 
   logger.info("Scheduler started");
+}
+
+/**
+ * Finalizes the current trading day's sentiment at 4 PM EST (market close).
+ * Runs one last poll for the daily thread, then logs that the day is finalized.
+ * Subsequent polls will accumulate sentiment under the next trading day.
+ */
+async function finalizeDaySentiment(): Promise<void> {
+  try {
+    // Run a final poll to capture any last-minute comments from the daily thread
+    await pollAndAnalyze();
+    logger.info("Daily sentiment finalized at market close", {
+      finalizedDate: getTodayDateString(),
+      nextTradingDate: getTradingDateString(),
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error("Failed to finalize daily sentiment", { error: message });
+  }
 }
 
 /**

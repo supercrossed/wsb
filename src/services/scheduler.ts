@@ -172,11 +172,11 @@ export function startScheduler(): void {
     pollAndAnalyze();
   }, intervalMs);
 
-  // Daily cleanup: purge data older than 90 days at midnight EST
+  // Daily cleanup: purge old comments at midnight EST
   cron.schedule(
     "0 0 * * *",
     () => {
-      purgeOldData(config.sentiment.historyDays);
+      purgeOldData();
     },
     { timezone: "America/New_York" },
   );

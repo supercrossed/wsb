@@ -200,14 +200,23 @@ export function getCommentCountSince(sinceUtc: number, threadType?: ThreadType):
   return result;
 }
 
-export function purgeOldData(retainDays: number): void {
-  const cutoff = Math.floor(Date.now() / 1000) - retainDays * 86400;
-  getDb().prepare("DELETE FROM comments WHERE created_utc < ?").run(cutoff);
+export function purgeOldData(): void {
+  // Comments: only keep today and yesterday (for overnight thread analysis)
+  const twoDaysAgo = Math.floor(Date.now() / 1000) - 2 * 86400;
+  const commentResult = getDb().prepare("DELETE FROM comments WHERE created_utc < ?").run(twoDaysAgo);
+
+  // daily_sentiment: keep 90 days for the dashboard history chart
   getDb()
-    .prepare("DELETE FROM daily_sentiment WHERE date < date('now', ? || ' days')")
-    .run(`-${retainDays}`);
-  getDb()
-    .prepare("DELETE FROM historical WHERE date < date('now', ? || ' days')")
-    .run(`-${retainDays}`);
-  logger.info("Purged old data", { retainDays });
+    .prepare("DELETE FROM daily_sentiment WHERE date < date('now', '-90 days')")
+    .run();
+
+  // historical: never purge — this is the long-term record of WSB sentiment
+  // vs SPY outcomes for analyzing inverse strategy performance
+
+  // Reclaim disk space after large deletes
+  if (commentResult.changes > 1000) {
+    getDb().pragma("optimize");
+  }
+
+  logger.info("Purged old data", { commentsDeleted: commentResult.changes });
 }

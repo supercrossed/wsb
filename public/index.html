@@ -1,2248 +1,2891 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WSB Inverse Sentiment Tracker</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg: #06080d;
-      --surface: #0e1218;
-      --surface-raised: #141a23;
-      --border: #1e2732;
-      --border-glow: rgba(88, 166, 255, 0.2);
-      --text: #e6edf3;
-      --text-muted: #6e7a88;
-      --green: #00ff87;
-      --green-dim: rgba(0, 255, 135, 0.12);
-      --red: #ff3b5c;
-      --red-dim: rgba(255, 59, 92, 0.12);
-      --yellow: #ffb800;
-      --yellow-dim: rgba(255, 184, 0, 0.12);
-      --blue: #58a6ff;
-      --blue-dim: rgba(88, 166, 255, 0.1);
-    }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WSB Inverse Sentiment Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #06080d;
+        --surface: #0e1218;
+        --surface-raised: #141a23;
+        --border: #1e2732;
+        --border-glow: rgba(88, 166, 255, 0.2);
+        --text: #e6edf3;
+        --text-muted: #6e7a88;
+        --green: #00ff87;
+        --green-dim: rgba(0, 255, 135, 0.12);
+        --red: #ff3b5c;
+        --red-dim: rgba(255, 59, 92, 0.12);
+        --yellow: #ffb800;
+        --yellow-dim: rgba(255, 184, 0, 0.12);
+        --blue: #58a6ff;
+        --blue-dim: rgba(88, 166, 255, 0.1);
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family:
+          "Inter",
+          -apple-system,
+          BlinkMacSystemFont,
+          sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        overflow-x: hidden;
+      }
 
-    /* Animated gradient background */
-    body::before {
-      content: '';
-      position: fixed;
-      top: -50%;
-      left: -50%;
-      width: 200%;
-      height: 200%;
-      background: radial-gradient(ellipse at 20% 50%, rgba(0,255,135,0.03) 0%, transparent 50%),
-                  radial-gradient(ellipse at 80% 20%, rgba(255,59,92,0.03) 0%, transparent 50%),
-                  radial-gradient(ellipse at 50% 80%, rgba(88,166,255,0.02) 0%, transparent 50%);
-      animation: bgShift 20s ease-in-out infinite;
-      z-index: -1;
-      pointer-events: none;
-    }
-    @keyframes bgShift {
-      0%, 100% { transform: translate(0, 0); }
-      33% { transform: translate(-2%, 1%); }
-      66% { transform: translate(1%, -2%); }
-    }
+      /* Animated gradient background */
+      body::before {
+        content: "";
+        position: fixed;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background:
+          radial-gradient(
+            ellipse at 20% 50%,
+            rgba(0, 255, 135, 0.03) 0%,
+            transparent 50%
+          ),
+          radial-gradient(
+            ellipse at 80% 20%,
+            rgba(255, 59, 92, 0.03) 0%,
+            transparent 50%
+          ),
+          radial-gradient(
+            ellipse at 50% 80%,
+            rgba(88, 166, 255, 0.02) 0%,
+            transparent 50%
+          );
+        animation: bgShift 20s ease-in-out infinite;
+        z-index: -1;
+        pointer-events: none;
+      }
+      @keyframes bgShift {
+        0%,
+        100% {
+          transform: translate(0, 0);
+        }
+        33% {
+          transform: translate(-2%, 1%);
+        }
+        66% {
+          transform: translate(1%, -2%);
+        }
+      }
 
-    header {
-      background: rgba(14, 18, 24, 0.85);
-      border-bottom: 1px solid var(--border);
-      padding: 16px 28px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-    header h1 {
-      font-size: 1.3rem;
-      font-weight: 900;
-      letter-spacing: -0.02em;
-      background: linear-gradient(135deg, var(--green), var(--blue));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    .status {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-family: 'JetBrains Mono', monospace;
-    }
-    .status .dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      background: var(--green);
-      display: inline-block;
-      box-shadow: 0 0 8px var(--green);
-      animation: pulse 2s ease-in-out infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--green); }
-      50% { opacity: 0.5; box-shadow: 0 0 20px var(--green); }
-    }
+      header {
+        background: rgba(14, 18, 24, 0.85);
+        border-bottom: 1px solid var(--border);
+        padding: 16px 28px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        position: sticky;
+        top: 0;
+        z-index: 100;
+      }
+      header h1 {
+        font-size: 1.3rem;
+        font-weight: 900;
+        letter-spacing: -0.02em;
+        background: linear-gradient(135deg, var(--green), var(--blue));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+      .status {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-family: "JetBrains Mono", monospace;
+      }
+      .status .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--green);
+        display: inline-block;
+        box-shadow: 0 0 8px var(--green);
+        animation: pulse 2s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+          box-shadow: 0 0 8px var(--green);
+        }
+        50% {
+          opacity: 0.5;
+          box-shadow: 0 0 20px var(--green);
+        }
+      }
 
-    nav {
-      background: rgba(14, 18, 24, 0.85);
-      border-bottom: 1px solid var(--border);
-      padding: 0 28px;
-      display: flex;
-      gap: 0;
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-    }
-    nav a {
-      color: var(--text-muted);
-      text-decoration: none;
-      padding: 12px 20px;
-      font-size: 0.85rem;
-      font-weight: 600;
-      border-bottom: 2px solid transparent;
-      transition: all 0.25s;
-      letter-spacing: 0.02em;
-    }
-    nav a:hover { color: var(--text); }
-    nav a.active {
-      color: var(--text);
-      border-bottom-color: var(--blue);
-    }
+      nav {
+        background: rgba(14, 18, 24, 0.85);
+        border-bottom: 1px solid var(--border);
+        padding: 0 28px;
+        display: flex;
+        gap: 0;
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+      }
+      nav a {
+        color: var(--text-muted);
+        text-decoration: none;
+        padding: 12px 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        border-bottom: 2px solid transparent;
+        transition: all 0.25s;
+        letter-spacing: 0.02em;
+      }
+      nav a:hover {
+        color: var(--text);
+      }
+      nav a.active {
+        color: var(--text);
+        border-bottom-color: var(--blue);
+      }
 
-    .container { max-width: 1100px; margin: 0 auto; padding: 28px; }
+      .container {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 28px;
+      }
 
-    .grid-main {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 20px;
-    }
-    @media (max-width: 1024px) {
-      .grid-main { grid-template-columns: 1fr 1fr; }
-    }
-    @media (max-width: 768px) {
-      .grid-main { grid-template-columns: 1fr; }
-    }
+      .grid-main {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
+      }
+      @media (max-width: 1024px) {
+        .grid-main {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+      @media (max-width: 768px) {
+        .grid-main {
+          grid-template-columns: 1fr;
+        }
+      }
 
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 28px;
-      position: relative;
-      overflow: hidden;
-      transition: border-color 0.3s, box-shadow 0.3s;
-    }
-    .card:hover {
-      border-color: var(--border-glow);
-      box-shadow: 0 0 30px rgba(88, 166, 255, 0.04);
-    }
-    .card h2 {
-      font-size: 0.72rem;
-      font-weight: 700;
-      margin-bottom: 20px;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-    }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 28px;
+        position: relative;
+        overflow: hidden;
+        transition:
+          border-color 0.3s,
+          box-shadow 0.3s;
+      }
+      .card:hover {
+        border-color: var(--border-glow);
+        box-shadow: 0 0 30px rgba(88, 166, 255, 0.04);
+      }
+      .card h2 {
+        font-size: 0.72rem;
+        font-weight: 700;
+        margin-bottom: 20px;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+      }
 
-    /* Hardware monitor card */
-    .hw-card {
-      margin-top: 20px;
-      padding: 18px 28px;
-      display: flex;
-      align-items: center;
-      gap: 32px;
-      flex-wrap: wrap;
-    }
-    .hw-card .hw-label {
-      font-size: 0.65rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: var(--text-muted);
-      white-space: nowrap;
-    }
-    .hw-card .hw-stats {
-      display: flex;
-      gap: 28px;
-      flex: 1;
-      flex-wrap: wrap;
-    }
-    .hw-stat {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      min-width: 120px;
-    }
-    .hw-stat .hw-stat-label {
-      font-size: 0.6rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--text-muted);
-    }
-    .hw-stat .hw-stat-value {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.85rem;
-      font-weight: 700;
-      color: var(--text);
-    }
-    .hw-stat .hw-bar {
-      height: 4px;
-      border-radius: 2px;
-      background: var(--surface-raised);
-      overflow: hidden;
-      margin-top: 2px;
-    }
-    .hw-stat .hw-bar-fill {
-      height: 100%;
-      border-radius: 2px;
-      transition: width 0.5s ease;
-    }
-    .hw-bar-fill.green { background: var(--green); }
-    .hw-bar-fill.yellow { background: var(--yellow); }
-    .hw-bar-fill.red { background: var(--red); }
-    .hw-stat .hw-stat-sub {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.6rem;
-      color: var(--text-muted);
-    }
-    .hw-uptime {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.7rem;
-      color: var(--text-muted);
-      margin-left: auto;
-      white-space: nowrap;
-    }
-    @media (max-width: 768px) {
-      .hw-card { gap: 16px; padding: 16px; }
-      .hw-stats { gap: 16px; }
-      .hw-uptime { margin-left: 0; width: 100%; }
-    }
+      /* Hardware monitor card */
+      .hw-card {
+        margin-top: 20px;
+        padding: 18px 28px;
+        display: flex;
+        align-items: center;
+        gap: 32px;
+        flex-wrap: wrap;
+      }
+      .hw-card .hw-label {
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--text-muted);
+        white-space: nowrap;
+      }
+      .hw-card .hw-stats {
+        display: flex;
+        gap: 28px;
+        flex: 1;
+        flex-wrap: wrap;
+      }
+      .hw-stat {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 120px;
+      }
+      .hw-stat .hw-stat-label {
+        font-size: 0.6rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text-muted);
+      }
+      .hw-stat .hw-stat-value {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--text);
+      }
+      .hw-stat .hw-bar {
+        height: 4px;
+        border-radius: 2px;
+        background: var(--surface-raised);
+        overflow: hidden;
+        margin-top: 2px;
+      }
+      .hw-stat .hw-bar-fill {
+        height: 100%;
+        border-radius: 2px;
+        transition: width 0.5s ease;
+      }
+      .hw-bar-fill.green {
+        background: var(--green);
+      }
+      .hw-bar-fill.yellow {
+        background: var(--yellow);
+      }
+      .hw-bar-fill.red {
+        background: var(--red);
+      }
+      .hw-stat .hw-stat-sub {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.6rem;
+        color: var(--text-muted);
+      }
+      .hw-uptime {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        margin-left: auto;
+        white-space: nowrap;
+      }
+      @media (max-width: 768px) {
+        .hw-card {
+          gap: 16px;
+          padding: 16px;
+        }
+        .hw-stats {
+          gap: 16px;
+        }
+        .hw-uptime {
+          margin-left: 0;
+          width: 100%;
+        }
+      }
 
-    /* Recommendation card */
-    .recommendation {
-      text-align: center;
-      padding: 32px 28px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-    }
-    .recommendation .action {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 4.5rem;
-      font-weight: 700;
-      margin: 16px 0 12px;
-      position: relative;
-      line-height: 1;
-    }
-    .recommendation .action.calls {
-      color: var(--green);
-      text-shadow: 0 0 60px rgba(0,255,135,0.35), 0 0 120px rgba(0,255,135,0.1);
-    }
-    .recommendation .action.puts {
-      color: var(--red);
-      text-shadow: 0 0 60px rgba(255,59,92,0.35), 0 0 120px rgba(255,59,92,0.1);
-    }
-    .recommendation .action.hold {
-      color: var(--yellow);
-      text-shadow: 0 0 60px rgba(255,184,0,0.35), 0 0 120px rgba(255,184,0,0.1);
-    }
-    /* Glow ring behind the action */
-    .recommendation .action::before {
-      content: '';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 160px;
-      height: 160px;
-      border-radius: 50%;
-      opacity: 0.08;
-      z-index: -1;
-    }
-    .recommendation .action.calls::before { background: radial-gradient(circle, var(--green), transparent 70%); opacity: 0.15; }
-    .recommendation .action.puts::before { background: radial-gradient(circle, var(--red), transparent 70%); opacity: 0.15; }
-    .recommendation .action.hold::before { background: radial-gradient(circle, var(--yellow), transparent 70%); opacity: 0.12; }
+      /* Recommendation card */
+      .recommendation {
+        text-align: center;
+        padding: 32px 28px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+      .recommendation .action {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 4.5rem;
+        font-weight: 700;
+        margin: 16px 0 12px;
+        position: relative;
+        line-height: 1;
+      }
+      .recommendation .action.calls {
+        color: var(--green);
+        text-shadow:
+          0 0 60px rgba(0, 255, 135, 0.35),
+          0 0 120px rgba(0, 255, 135, 0.1);
+      }
+      .recommendation .action.puts {
+        color: var(--red);
+        text-shadow:
+          0 0 60px rgba(255, 59, 92, 0.35),
+          0 0 120px rgba(255, 59, 92, 0.1);
+      }
+      .recommendation .action.hold {
+        color: var(--yellow);
+        text-shadow:
+          0 0 60px rgba(255, 184, 0, 0.35),
+          0 0 120px rgba(255, 184, 0, 0.1);
+      }
+      /* Glow ring behind the action */
+      .recommendation .action::before {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 160px;
+        height: 160px;
+        border-radius: 50%;
+        opacity: 0.08;
+        z-index: -1;
+      }
+      .recommendation .action.calls::before {
+        background: radial-gradient(circle, var(--green), transparent 70%);
+        opacity: 0.15;
+      }
+      .recommendation .action.puts::before {
+        background: radial-gradient(circle, var(--red), transparent 70%);
+        opacity: 0.15;
+      }
+      .recommendation .action.hold::before {
+        background: radial-gradient(circle, var(--yellow), transparent 70%);
+        opacity: 0.12;
+      }
 
-    .rec-tagline {
-      font-size: 0.95rem;
-      font-weight: 600;
-      font-style: italic;
-      margin-bottom: 20px;
-      min-height: 1.4em;
-    }
-    .rec-tagline.calls { color: var(--green); }
-    .rec-tagline.puts { color: var(--red); }
-    .rec-tagline.hold { color: var(--yellow); }
+      .rec-tagline {
+        font-size: 0.95rem;
+        font-weight: 600;
+        font-style: italic;
+        margin-bottom: 20px;
+        min-height: 1.4em;
+      }
+      .rec-tagline.calls {
+        color: var(--green);
+      }
+      .rec-tagline.puts {
+        color: var(--red);
+      }
+      .rec-tagline.hold {
+        color: var(--yellow);
+      }
 
-    .rec-label {
-      font-size: 0.72rem;
-      font-weight: 700;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-    }
-    .rec-explanation {
-      margin-top: 8px;
-      font-size: 0.88rem;
-      color: var(--text-muted);
-      max-width: 280px;
-      line-height: 1.5;
-    }
-    .rec-scorecard {
-      margin-top: 16px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding-top: 14px;
-      border-top: 1px solid var(--border);
-      width: 100%;
-      justify-content: center;
-    }
-    .rec-scorecard canvas {
-      width: 80px !important;
-      height: 80px !important;
-    }
-    .rec-scorecard-legend {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.72rem;
-    }
-    .rec-scorecard-legend .sc-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .rec-scorecard-legend .sc-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-    .rec-scorecard-legend .sc-label {
-      color: var(--text-muted);
-    }
-    .rec-scorecard-legend .sc-value {
-      font-weight: 700;
-      color: var(--text);
-    }
+      .rec-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+      }
+      .rec-explanation {
+        margin-top: 8px;
+        font-size: 0.88rem;
+        color: var(--text-muted);
+        max-width: 280px;
+        line-height: 1.5;
+      }
+      .rec-scorecard {
+        margin-top: 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding-top: 14px;
+        border-top: 1px solid var(--border);
+        width: 100%;
+        justify-content: center;
+      }
+      .rec-scorecard canvas {
+        width: 80px !important;
+        height: 80px !important;
+      }
+      .rec-scorecard-legend {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.72rem;
+      }
+      .rec-scorecard-legend .sc-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .rec-scorecard-legend .sc-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+      .rec-scorecard-legend .sc-label {
+        color: var(--text-muted);
+      }
+      .rec-scorecard-legend .sc-value {
+        font-weight: 700;
+        color: var(--text);
+      }
 
-    /* Cramer Index Card */
-    .cramer-card {
-      text-align: center;
-      padding: 28px 24px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-      overflow: hidden;
-    }
-    .cramer-card::after {
-      content: '';
-      position: absolute;
-      top: -40px;
-      right: -40px;
-      width: 120px;
-      height: 120px;
-      background: radial-gradient(circle, rgba(255,184,0,0.08), transparent 70%);
-      border-radius: 50%;
-    }
-    .cramer-label {
-      font-size: 0.72rem;
-      font-weight: 700;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-    }
-    .cramer-action {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 4.5rem;
-      font-weight: 700;
-      margin: 16px 0 12px;
-      line-height: 1;
-      position: relative;
-    }
-    .cramer-action.calls {
-      color: var(--green);
-      text-shadow: 0 0 60px rgba(0,255,135,0.35), 0 0 120px rgba(0,255,135,0.1);
-    }
-    .cramer-action.puts {
-      color: var(--red);
-      text-shadow: 0 0 60px rgba(255,59,92,0.35), 0 0 120px rgba(255,59,92,0.1);
-    }
-    .cramer-action.hold {
-      color: var(--yellow);
-      text-shadow: 0 0 60px rgba(255,184,0,0.35), 0 0 120px rgba(255,184,0,0.1);
-    }
-    .cramer-action::before {
-      content: '';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 160px;
-      height: 160px;
-      border-radius: 50%;
-      opacity: 0.08;
-      z-index: -1;
-    }
-    .cramer-action.calls::before { background: radial-gradient(circle, var(--green), transparent 70%); opacity: 0.15; }
-    .cramer-action.puts::before { background: radial-gradient(circle, var(--red), transparent 70%); opacity: 0.15; }
-    .cramer-action.hold::before { background: radial-gradient(circle, var(--yellow), transparent 70%); opacity: 0.12; }
-    .cramer-tagline {
-      font-size: 0.88rem;
-      font-weight: 600;
-      font-style: italic;
-      margin-bottom: 12px;
-      min-height: 1.4em;
-    }
-    .cramer-tagline.calls { color: var(--green); }
-    .cramer-tagline.puts { color: var(--red); }
-    .cramer-tagline.hold { color: var(--yellow); }
-    .cramer-comparison {
-      font-size: 0.82rem;
-      color: var(--text-muted);
-      margin-top: 8px;
-      line-height: 1.5;
-      max-width: 300px;
-    }
-    .cramer-picks-summary {
-      display: flex;
-      gap: 16px;
-      margin-top: 12px;
-      font-size: 0.82rem;
-    }
-    .cramer-picks-summary .bulls { color: var(--green); font-weight: 600; }
-    .cramer-picks-summary .bears { color: var(--red); font-weight: 600; }
-    .cramer-picks-summary .neutrals { color: var(--text-muted); font-weight: 600; }
-    .cramer-recent {
-      margin-top: 14px;
-      width: 100%;
-      max-height: 120px;
-      overflow-y: auto;
-      font-size: 0.75rem;
-      text-align: left;
-    }
-    .cramer-pick-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 3px 0;
-      border-bottom: 1px solid rgba(30,39,50,0.4);
-    }
-    .cramer-pick-ticker { color: var(--blue); font-weight: 700; min-width: 55px; }
-    .cramer-pick-dir.bullish { color: var(--green); }
-    .cramer-pick-dir.bearish { color: var(--red); }
-    .cramer-pick-dir.neutral { color: var(--text-muted); }
-    .cramer-pick-date { color: var(--text-muted); flex: 1; }
-    .cramer-verdict { font-weight: 700; font-size: 0.7rem; text-transform: uppercase; }
-    .cramer-verdict.right { color: var(--green); }
-    .cramer-verdict.wrong { color: var(--red); }
-    .cramer-verdict.pending { color: var(--text-muted); }
+      /* Cramer Index Card */
+      .cramer-card {
+        text-align: center;
+        padding: 28px 24px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        overflow: hidden;
+      }
+      .cramer-card::after {
+        content: "";
+        position: absolute;
+        top: -40px;
+        right: -40px;
+        width: 120px;
+        height: 120px;
+        background: radial-gradient(
+          circle,
+          rgba(255, 184, 0, 0.08),
+          transparent 70%
+        );
+        border-radius: 50%;
+      }
+      .cramer-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+      }
+      .cramer-action {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 4.5rem;
+        font-weight: 700;
+        margin: 16px 0 12px;
+        line-height: 1;
+        position: relative;
+      }
+      .cramer-action.calls {
+        color: var(--green);
+        text-shadow:
+          0 0 60px rgba(0, 255, 135, 0.35),
+          0 0 120px rgba(0, 255, 135, 0.1);
+      }
+      .cramer-action.puts {
+        color: var(--red);
+        text-shadow:
+          0 0 60px rgba(255, 59, 92, 0.35),
+          0 0 120px rgba(255, 59, 92, 0.1);
+      }
+      .cramer-action.hold {
+        color: var(--yellow);
+        text-shadow:
+          0 0 60px rgba(255, 184, 0, 0.35),
+          0 0 120px rgba(255, 184, 0, 0.1);
+      }
+      .cramer-action::before {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 160px;
+        height: 160px;
+        border-radius: 50%;
+        opacity: 0.08;
+        z-index: -1;
+      }
+      .cramer-action.calls::before {
+        background: radial-gradient(circle, var(--green), transparent 70%);
+        opacity: 0.15;
+      }
+      .cramer-action.puts::before {
+        background: radial-gradient(circle, var(--red), transparent 70%);
+        opacity: 0.15;
+      }
+      .cramer-action.hold::before {
+        background: radial-gradient(circle, var(--yellow), transparent 70%);
+        opacity: 0.12;
+      }
+      .cramer-tagline {
+        font-size: 0.88rem;
+        font-weight: 600;
+        font-style: italic;
+        margin-bottom: 12px;
+        min-height: 1.4em;
+      }
+      .cramer-tagline.calls {
+        color: var(--green);
+      }
+      .cramer-tagline.puts {
+        color: var(--red);
+      }
+      .cramer-tagline.hold {
+        color: var(--yellow);
+      }
+      .cramer-comparison {
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        margin-top: 8px;
+        line-height: 1.5;
+        max-width: 300px;
+      }
+      .cramer-picks-summary {
+        display: flex;
+        gap: 16px;
+        margin-top: 12px;
+        font-size: 0.82rem;
+      }
+      .cramer-picks-summary .bulls {
+        color: var(--green);
+        font-weight: 600;
+      }
+      .cramer-picks-summary .bears {
+        color: var(--red);
+        font-weight: 600;
+      }
+      .cramer-picks-summary .neutrals {
+        color: var(--text-muted);
+        font-weight: 600;
+      }
+      .cramer-recent {
+        margin-top: 14px;
+        width: 100%;
+        max-height: 120px;
+        overflow-y: auto;
+        font-size: 0.75rem;
+        text-align: left;
+      }
+      .cramer-pick-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 3px 0;
+        border-bottom: 1px solid rgba(30, 39, 50, 0.4);
+      }
+      .cramer-pick-ticker {
+        color: var(--blue);
+        font-weight: 700;
+        min-width: 55px;
+      }
+      .cramer-pick-dir.bullish {
+        color: var(--green);
+      }
+      .cramer-pick-dir.bearish {
+        color: var(--red);
+      }
+      .cramer-pick-dir.neutral {
+        color: var(--text-muted);
+      }
+      .cramer-pick-date {
+        color: var(--text-muted);
+        flex: 1;
+      }
+      .cramer-verdict {
+        font-weight: 700;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+      }
+      .cramer-verdict.right {
+        color: var(--green);
+      }
+      .cramer-verdict.wrong {
+        color: var(--red);
+      }
+      .cramer-verdict.pending {
+        color: var(--text-muted);
+      }
 
-    /* Sentiment bar */
-    .sentiment-bar-wrap {
-      margin-top: 24px;
-    }
-    .sentiment-bar-labels {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 8px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.82rem;
-      font-weight: 700;
-    }
-    .sentiment-bar-labels .bull { color: var(--green); }
-    .sentiment-bar-labels .bear { color: var(--red); }
-    .sentiment-bar {
-      height: 10px;
-      border-radius: 5px;
-      background: var(--red);
-      overflow: hidden;
-      position: relative;
-    }
-    .sentiment-bar .fill {
-      height: 100%;
-      border-radius: 5px;
-      background: linear-gradient(90deg, #00cc6a, var(--green));
-      transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-      position: relative;
-    }
-    .sentiment-bar .fill::after {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: linear-gradient(180deg, rgba(255,255,255,0.15), transparent);
-      border-radius: 5px;
-    }
+      /* Sentiment bar */
+      .sentiment-bar-wrap {
+        margin-top: 24px;
+      }
+      .sentiment-bar-labels {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.82rem;
+        font-weight: 700;
+      }
+      .sentiment-bar-labels .bull {
+        color: var(--green);
+      }
+      .sentiment-bar-labels .bear {
+        color: var(--red);
+      }
+      .sentiment-bar {
+        height: 10px;
+        border-radius: 5px;
+        background: var(--red);
+        overflow: hidden;
+        position: relative;
+      }
+      .sentiment-bar .fill {
+        height: 100%;
+        border-radius: 5px;
+        background: linear-gradient(90deg, #00cc6a, var(--green));
+        transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+      }
+      .sentiment-bar .fill::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.15),
+          transparent
+        );
+        border-radius: 5px;
+      }
 
-    .meta-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 16px;
-    }
-    .total-comments {
-      color: var(--text-muted);
-      font-size: 0.78rem;
-      font-family: 'JetBrains Mono', monospace;
-      text-align: center;
-      margin-top: 18px;
-    }
-    .total-comments span {
-      color: var(--blue);
-      font-weight: 700;
-    }
+      .meta-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+      .total-comments {
+        color: var(--text-muted);
+        font-size: 0.78rem;
+        font-family: "JetBrains Mono", monospace;
+        text-align: center;
+        margin-top: 18px;
+      }
+      .total-comments span {
+        color: var(--blue);
+        font-weight: 700;
+      }
 
-    .thread-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 5px 12px;
-      border-radius: 6px;
-      font-size: 0.68rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      font-family: 'JetBrains Mono', monospace;
-    }
-    .thread-badge.daily { background: var(--green-dim); color: var(--green); }
-    .thread-badge.overnight { background: var(--blue-dim); color: var(--blue); }
-    .thread-badge.weekend { background: var(--yellow-dim); color: var(--yellow); }
+      .thread-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 12px;
+        border-radius: 6px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-family: "JetBrains Mono", monospace;
+      }
+      .thread-badge.daily {
+        background: var(--green-dim);
+        color: var(--green);
+      }
+      .thread-badge.overnight {
+        background: var(--blue-dim);
+        color: var(--blue);
+      }
+      .thread-badge.weekend {
+        background: var(--yellow-dim);
+        color: var(--yellow);
+      }
 
-    .chart-wrap {
-      position: relative;
-      max-width: 200px;
-      margin: 0 auto 8px;
-    }
+      .chart-wrap {
+        position: relative;
+        max-width: 200px;
+        margin: 0 auto 8px;
+      }
 
-    /* Stat pills */
-    .stats-row {
-      display: flex;
-      gap: 12px;
-      margin-top: 16px;
-      justify-content: center;
-    }
-    .stat-pill {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 16px;
-      border-radius: 10px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.85rem;
-      font-weight: 700;
-    }
-    .stat-pill.bullish { background: var(--green-dim); color: var(--green); }
-    .stat-pill.bearish { background: var(--red-dim); color: var(--red); }
-    .stat-pill .stat-label {
-      font-weight: 500;
-      font-size: 0.68rem;
-      opacity: 0.7;
-    }
+      /* Stat pills */
+      .stats-row {
+        display: flex;
+        gap: 12px;
+        margin-top: 16px;
+        justify-content: center;
+      }
+      .stat-pill {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        border-radius: 10px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.85rem;
+        font-weight: 700;
+      }
+      .stat-pill.bullish {
+        background: var(--green-dim);
+        color: var(--green);
+      }
+      .stat-pill.bearish {
+        background: var(--red-dim);
+        color: var(--red);
+      }
+      .stat-pill .stat-label {
+        font-weight: 500;
+        font-size: 0.68rem;
+        opacity: 0.7;
+      }
 
-    .page { display: none; }
-    .page.active { display: block; }
-    .history-chart-wrap { height: 350px; }
-    .updated {
-      color: var(--text-muted);
-      font-size: 0.72rem;
-      text-align: center;
-      margin-top: 24px;
-      font-family: 'JetBrains Mono', monospace;
-    }
-    .no-data {
-      text-align: center;
-      color: var(--text-muted);
-      padding: 48px 24px;
-      font-size: 0.9rem;
-    }
+      .page {
+        display: none;
+      }
+      .page.active {
+        display: block;
+      }
+      .history-chart-wrap {
+        height: 350px;
+      }
+      .updated {
+        color: var(--text-muted);
+        font-size: 0.72rem;
+        text-align: center;
+        margin-top: 24px;
+        font-family: "JetBrains Mono", monospace;
+      }
+      .no-data {
+        text-align: center;
+        color: var(--text-muted);
+        padding: 48px 24px;
+        font-size: 0.9rem;
+      }
 
-    /* SPY scorecard card */
-    .spy-card {
-      margin-top: 20px;
-    }
-    .spy-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 16px;
-    }
-    .spy-price-row {
-      display: flex;
-      align-items: baseline;
-      gap: 14px;
-      font-family: 'JetBrains Mono', monospace;
-    }
-    .spy-ticker {
-      font-size: 0.85rem;
-      font-weight: 700;
-      color: var(--text-muted);
-      letter-spacing: 0.06em;
-    }
-    .spy-price-big {
-      font-size: 2rem;
-      font-weight: 700;
-      line-height: 1;
-      transition: color 1.5s ease;
-    }
-    .spy-price-big.up { color: var(--green); }
-    .spy-price-big.down { color: var(--red); }
-    .spy-price-big.flat { color: var(--text); }
-    .spy-price-big.flash-up { color: #00ff88; transition: none; }
-    .spy-price-big.flash-down { color: #ff4466; transition: none; }
-    .spy-daily-change {
-      font-size: 0.95rem;
-      font-weight: 700;
-      padding: 4px 12px;
-      border-radius: 6px;
-    }
-    .spy-daily-change.up { color: var(--green); background: var(--green-dim); }
-    .spy-daily-change.down { color: var(--red); background: var(--red-dim); }
-    .spy-daily-change.flat { color: var(--yellow); background: var(--yellow-dim); }
+      /* SPY scorecard card */
+      .spy-card {
+        margin-top: 20px;
+      }
+      .spy-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+      }
+      .spy-price-row {
+        display: flex;
+        align-items: baseline;
+        gap: 14px;
+        font-family: "JetBrains Mono", monospace;
+      }
+      .spy-ticker {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--text-muted);
+        letter-spacing: 0.06em;
+      }
+      .spy-price-big {
+        font-size: 2rem;
+        font-weight: 700;
+        line-height: 1;
+        transition: color 1.5s ease;
+      }
+      .spy-price-big.up {
+        color: var(--green);
+      }
+      .spy-price-big.down {
+        color: var(--red);
+      }
+      .spy-price-big.flat {
+        color: var(--text);
+      }
+      .spy-price-big.flash-up {
+        color: #00ff88;
+        transition: none;
+      }
+      .spy-price-big.flash-down {
+        color: #ff4466;
+        transition: none;
+      }
+      .spy-daily-change {
+        font-size: 0.95rem;
+        font-weight: 700;
+        padding: 4px 12px;
+        border-radius: 6px;
+      }
+      .spy-daily-change.up {
+        color: var(--green);
+        background: var(--green-dim);
+      }
+      .spy-daily-change.down {
+        color: var(--red);
+        background: var(--red-dim);
+      }
+      .spy-daily-change.flat {
+        color: var(--yellow);
+        background: var(--yellow-dim);
+      }
 
-    .spy-market-state {
-      font-size: 0.65rem;
-      font-weight: 700;
-      padding: 3px 8px;
-      border-radius: 4px;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      font-family: 'JetBrains Mono', monospace;
-    }
-    .spy-market-state.regular { background: var(--green-dim); color: var(--green); }
-    .spy-market-state.pre { background: var(--yellow-dim); color: var(--yellow); }
-    .spy-market-state.post { background: var(--blue-dim); color: var(--blue); }
-    .spy-market-state.closed { background: rgba(110,122,136,0.1); color: var(--text-muted); }
+      .spy-market-state {
+        font-size: 0.65rem;
+        font-weight: 700;
+        padding: 3px 8px;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        font-family: "JetBrains Mono", monospace;
+      }
+      .spy-market-state.regular {
+        background: var(--green-dim);
+        color: var(--green);
+      }
+      .spy-market-state.pre {
+        background: var(--yellow-dim);
+        color: var(--yellow);
+      }
+      .spy-market-state.post {
+        background: var(--blue-dim);
+        color: var(--blue);
+      }
+      .spy-market-state.closed {
+        background: rgba(110, 122, 136, 0.1);
+        color: var(--text-muted);
+      }
 
-    .spy-verdict {
-      margin-top: 16px;
-      padding: 16px 20px;
-      border-radius: 12px;
-      background: var(--surface-raised);
-      border: 1px solid var(--border);
-    }
-    .spy-verdict-text {
-      font-size: 1rem;
-      font-weight: 700;
-      font-style: italic;
-      line-height: 1.5;
-    }
-    .spy-verdict-text.inverse-right { color: var(--green); }
-    .spy-verdict-text.inverse-wrong { color: var(--red); }
-    .spy-verdict-text.no-data { color: var(--text-muted); }
-    .spy-verdict-sub {
-      font-size: 0.78rem;
-      color: var(--text-muted);
-      margin-top: 6px;
-      font-family: 'JetBrains Mono', monospace;
-    }
+      .spy-verdict {
+        margin-top: 16px;
+        padding: 16px 20px;
+        border-radius: 12px;
+        background: var(--surface-raised);
+        border: 1px solid var(--border);
+      }
+      .spy-verdict-text {
+        font-size: 1rem;
+        font-weight: 700;
+        font-style: italic;
+        line-height: 1.5;
+      }
+      .spy-verdict-text.inverse-right {
+        color: var(--green);
+      }
+      .spy-verdict-text.inverse-wrong {
+        color: var(--red);
+      }
+      .spy-verdict-text.no-data {
+        color: var(--text-muted);
+      }
+      .spy-verdict-sub {
+        font-size: 0.78rem;
+        color: var(--text-muted);
+        margin-top: 6px;
+        font-family: "JetBrains Mono", monospace;
+      }
 
-    .spy-streak {
-      display: flex;
-      gap: 6px;
-      margin-top: 14px;
-      align-items: center;
-    }
-    .spy-streak-label {
-      font-size: 0.68rem;
-      font-weight: 700;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      font-family: 'JetBrains Mono', monospace;
-      margin-right: 4px;
-    }
-    .spy-streak-dot {
-      width: 22px;
-      height: 22px;
-      border-radius: 5px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.65rem;
-      font-weight: 700;
-      font-family: 'JetBrains Mono', monospace;
-    }
-    .spy-streak-dot.win { background: var(--green-dim); color: var(--green); }
-    .spy-streak-dot.loss { background: var(--red-dim); color: var(--red); }
-    .spy-streak-dot.na { background: rgba(110,122,136,0.1); color: var(--text-muted); }
+      .spy-streak {
+        display: flex;
+        gap: 6px;
+        margin-top: 14px;
+        align-items: center;
+      }
+      .spy-streak-label {
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-family: "JetBrains Mono", monospace;
+        margin-right: 4px;
+      }
+      .spy-streak-dot {
+        width: 22px;
+        height: 22px;
+        border-radius: 5px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.65rem;
+        font-weight: 700;
+        font-family: "JetBrains Mono", monospace;
+      }
+      .spy-streak-dot.win {
+        background: var(--green-dim);
+        color: var(--green);
+      }
+      .spy-streak-dot.loss {
+        background: var(--red-dim);
+        color: var(--red);
+      }
+      .spy-streak-dot.na {
+        background: rgba(110, 122, 136, 0.1);
+        color: var(--text-muted);
+      }
 
-    /* Trade Bot page styles */
-    .tb-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-    }
-    @media (max-width: 768px) {
-      .tb-grid { grid-template-columns: 1fr; }
-    }
-    .tb-setup-card {
-      padding: 28px;
-    }
-    .tb-form-group {
-      margin-bottom: 16px;
-    }
-    .tb-form-group label {
-      display: block;
-      font-size: 0.72rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--text-muted);
-      margin-bottom: 6px;
-    }
-    .tb-input {
-      width: 100%;
-      padding: 10px 14px;
-      background: var(--surface-raised);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text);
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.85rem;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-    .tb-input:focus {
-      border-color: var(--blue);
-    }
-    .tb-input::placeholder {
-      color: var(--text-muted);
-      opacity: 0.5;
-    }
-    .tb-select {
-      width: 100%;
-      padding: 10px 14px;
-      background: var(--surface-raised);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text);
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.85rem;
-      outline: none;
-      cursor: pointer;
-      appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%236e7a88' d='M1.41 0L6 4.58 10.59 0 12 1.41l-6 6-6-6z'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 14px center;
-    }
-    .tb-select:focus {
-      border-color: var(--blue);
-    }
-    .tb-checkbox-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 16px;
-    }
-    .tb-checkbox-row input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-      accent-color: var(--blue);
-      cursor: pointer;
-    }
-    .tb-checkbox-row label {
-      margin: 0;
-      font-size: 0.85rem;
-      color: var(--text);
-      cursor: pointer;
-    }
-    .tb-btn {
-      padding: 10px 24px;
-      border: none;
-      border-radius: 8px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.82rem;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.2s;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-    }
-    .tb-btn-primary {
-      background: var(--blue);
-      color: #fff;
-    }
-    .tb-btn-primary:hover {
-      background: #6db3ff;
-    }
-    .tb-btn-primary:disabled {
-      background: var(--surface-raised);
-      color: var(--text-muted);
-      cursor: not-allowed;
-    }
-    .tb-btn-success {
-      background: var(--green);
-      color: #06080d;
-    }
-    .tb-btn-success:hover {
-      background: #33ff9f;
-    }
-    .tb-btn-danger {
-      background: var(--red);
-      color: #fff;
-    }
-    .tb-btn-danger:hover {
-      background: #ff5d79;
-    }
-    .tb-btn-row {
-      display: flex;
-      gap: 12px;
-      margin-top: 8px;
-    }
-    .tb-msg {
-      margin-top: 12px;
-      padding: 10px 14px;
-      border-radius: 8px;
-      font-size: 0.82rem;
-      font-family: 'JetBrains Mono', monospace;
-      display: none;
-    }
-    .tb-msg.success {
-      display: block;
-      background: var(--green-dim);
-      color: var(--green);
-      border: 1px solid rgba(0,255,135,0.2);
-    }
-    .tb-msg.error {
-      display: block;
-      background: var(--red-dim);
-      color: var(--red);
-      border: 1px solid rgba(255,59,92,0.2);
-    }
-    .tb-status-card {
-      padding: 28px;
-    }
-    .tb-status-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 16px;
-    }
-    .tb-bot-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 14px;
-      border-radius: 8px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.82rem;
-      font-weight: 700;
-    }
-    .tb-bot-badge.running {
-      background: var(--green-dim);
-      color: var(--green);
-    }
-    .tb-bot-badge.stopped {
-      background: rgba(110,122,136,0.1);
-      color: var(--text-muted);
-    }
-    .tb-bot-badge .tb-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      display: inline-block;
-    }
-    .tb-bot-badge.running .tb-dot {
-      background: var(--green);
-      box-shadow: 0 0 8px var(--green);
-      animation: pulse 2s ease-in-out infinite;
-    }
-    .tb-bot-badge.stopped .tb-dot {
-      background: var(--text-muted);
-    }
-    .tb-account-stats {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-top: 16px;
-    }
-    .tb-account-stat {
-      padding: 14px;
-      background: var(--surface-raised);
-      border-radius: 10px;
-      border: 1px solid var(--border);
-    }
-    .tb-account-stat-label {
-      font-size: 0.65rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--text-muted);
-      margin-bottom: 4px;
-    }
-    .tb-account-stat-value {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: var(--text);
-    }
-    .tb-positions {
-      margin-top: 16px;
-    }
-    .tb-positions h3 {
-      font-size: 0.72rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--text-muted);
-      margin-bottom: 10px;
-    }
-    .tb-pos-row {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      padding: 8px 0;
-      border-bottom: 1px solid rgba(30,39,50,0.4);
-      font-size: 0.82rem;
-    }
-    .tb-pos-symbol {
-      color: var(--blue);
-      font-weight: 700;
-      font-family: 'JetBrains Mono', monospace;
-      min-width: 60px;
-    }
-    .tb-pos-qty { color: var(--text-muted); min-width: 50px; }
-    .tb-pos-value { color: var(--text); flex: 1; }
-    .tb-pos-pl { font-weight: 700; font-family: 'JetBrains Mono', monospace; }
-    .tb-pos-pl.positive { color: var(--green); }
-    .tb-pos-pl.negative { color: var(--red); }
-    .tb-no-positions {
-      color: var(--text-muted);
-      font-size: 0.82rem;
-      font-style: italic;
-      padding: 12px 0;
-    }
+      /* Trade Bot page styles */
+      .tb-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+      @media (max-width: 768px) {
+        .tb-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      .tb-setup-card {
+        padding: 28px;
+      }
+      .tb-form-group {
+        margin-bottom: 16px;
+      }
+      .tb-form-group label {
+        display: block;
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+      }
+      .tb-input {
+        width: 100%;
+        padding: 10px 14px;
+        background: var(--surface-raised);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text);
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.85rem;
+        outline: none;
+        transition: border-color 0.2s;
+      }
+      .tb-input:focus {
+        border-color: var(--blue);
+      }
+      .tb-input::placeholder {
+        color: var(--text-muted);
+        opacity: 0.5;
+      }
+      .tb-select {
+        width: 100%;
+        padding: 10px 14px;
+        background: var(--surface-raised);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text);
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.85rem;
+        outline: none;
+        cursor: pointer;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%236e7a88' d='M1.41 0L6 4.58 10.59 0 12 1.41l-6 6-6-6z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 14px center;
+      }
+      .tb-select:focus {
+        border-color: var(--blue);
+      }
+      .tb-checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+      .tb-checkbox-row input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--blue);
+        cursor: pointer;
+      }
+      .tb-checkbox-row label {
+        margin: 0;
+        font-size: 0.85rem;
+        color: var(--text);
+        cursor: pointer;
+      }
+      .tb-btn {
+        padding: 10px 24px;
+        border: none;
+        border-radius: 8px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.82rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .tb-btn-primary {
+        background: var(--blue);
+        color: #fff;
+      }
+      .tb-btn-primary:hover {
+        background: #6db3ff;
+      }
+      .tb-btn-primary:disabled {
+        background: var(--surface-raised);
+        color: var(--text-muted);
+        cursor: not-allowed;
+      }
+      .tb-btn-success {
+        background: var(--green);
+        color: #06080d;
+      }
+      .tb-btn-success:hover {
+        background: #33ff9f;
+      }
+      .tb-btn-danger {
+        background: var(--red);
+        color: #fff;
+      }
+      .tb-btn-danger:hover {
+        background: #ff5d79;
+      }
+      .tb-btn-row {
+        display: flex;
+        gap: 12px;
+        margin-top: 8px;
+      }
+      .tb-msg {
+        margin-top: 12px;
+        padding: 10px 14px;
+        border-radius: 8px;
+        font-size: 0.82rem;
+        font-family: "JetBrains Mono", monospace;
+        display: none;
+      }
+      .tb-msg.success {
+        display: block;
+        background: var(--green-dim);
+        color: var(--green);
+        border: 1px solid rgba(0, 255, 135, 0.2);
+      }
+      .tb-msg.error {
+        display: block;
+        background: var(--red-dim);
+        color: var(--red);
+        border: 1px solid rgba(255, 59, 92, 0.2);
+      }
+      .tb-status-card {
+        padding: 28px;
+      }
+      .tb-status-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+      }
+      .tb-bot-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 14px;
+        border-radius: 8px;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.82rem;
+        font-weight: 700;
+      }
+      .tb-bot-badge.running {
+        background: var(--green-dim);
+        color: var(--green);
+      }
+      .tb-bot-badge.stopped {
+        background: rgba(110, 122, 136, 0.1);
+        color: var(--text-muted);
+      }
+      .tb-bot-badge .tb-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+      }
+      .tb-bot-badge.running .tb-dot {
+        background: var(--green);
+        box-shadow: 0 0 8px var(--green);
+        animation: pulse 2s ease-in-out infinite;
+      }
+      .tb-bot-badge.stopped .tb-dot {
+        background: var(--text-muted);
+      }
+      .tb-account-stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 16px;
+      }
+      .tb-account-stat {
+        padding: 14px;
+        background: var(--surface-raised);
+        border-radius: 10px;
+        border: 1px solid var(--border);
+      }
+      .tb-account-stat-label {
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text-muted);
+        margin-bottom: 4px;
+      }
+      .tb-account-stat-value {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--text);
+      }
+      .tb-positions {
+        margin-top: 16px;
+      }
+      .tb-positions h3 {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text-muted);
+        margin-bottom: 10px;
+      }
+      .tb-pos-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(30, 39, 50, 0.4);
+        font-size: 0.82rem;
+      }
+      .tb-pos-symbol {
+        color: var(--blue);
+        font-weight: 700;
+        font-family: "JetBrains Mono", monospace;
+        min-width: 60px;
+      }
+      .tb-pos-qty {
+        color: var(--text-muted);
+        min-width: 50px;
+      }
+      .tb-pos-value {
+        color: var(--text);
+        flex: 1;
+      }
+      .tb-pos-pl {
+        font-weight: 700;
+        font-family: "JetBrains Mono", monospace;
+      }
+      .tb-pos-pl.positive {
+        color: var(--green);
+      }
+      .tb-pos-pl.negative {
+        color: var(--red);
+      }
+      .tb-no-positions {
+        color: var(--text-muted);
+        font-size: 0.82rem;
+        font-style: italic;
+        padding: 12px 0;
+      }
 
-    /* Trade log table */
-    .tb-log-card {
-      margin-top: 20px;
-      padding: 28px;
-    }
-    .tb-log-table {
-      width: 100%;
-      font-size: 0.78rem;
-      font-family: 'JetBrains Mono', monospace;
-    }
-    .tb-log-table th {
-      text-align: left;
-      font-size: 0.65rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--text-muted);
-      padding: 8px 6px;
-      border-bottom: 1px solid var(--border);
-    }
-    .tb-log-table td {
-      padding: 6px;
-      border-bottom: 1px solid rgba(30,39,50,0.3);
-      color: var(--text);
-    }
-    .tb-log-empty {
-      color: var(--text-muted);
-      font-size: 0.82rem;
-      font-style: italic;
-      padding: 20px 0;
-      text-align: center;
-    }
-    .tb-mode-toggle {
-      display: flex;
-      gap: 0;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      overflow: hidden;
-      margin-bottom: 20px;
-    }
-    .tb-mode-toggle button {
-      flex: 1;
-      padding: 10px 20px;
-      background: var(--surface-raised);
-      color: var(--text-muted);
-      border: none;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.82rem;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .tb-mode-toggle button.active {
-      background: var(--blue-dim);
-      color: var(--blue);
-    }
-    .tb-mode-toggle button:hover:not(.active) {
-      color: var(--text);
-    }
+      /* Trade log table */
+      .tb-log-card {
+        margin-top: 20px;
+        padding: 28px;
+      }
+      .tb-log-table {
+        width: 100%;
+        font-size: 0.78rem;
+        font-family: "JetBrains Mono", monospace;
+      }
+      .tb-log-table th {
+        text-align: left;
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text-muted);
+        padding: 8px 6px;
+        border-bottom: 1px solid var(--border);
+      }
+      .tb-log-table td {
+        padding: 6px;
+        border-bottom: 1px solid rgba(30, 39, 50, 0.3);
+        color: var(--text);
+      }
+      .tb-log-empty {
+        color: var(--text-muted);
+        font-size: 0.82rem;
+        font-style: italic;
+        padding: 20px 0;
+        text-align: center;
+      }
+      .tb-mode-toggle {
+        display: flex;
+        gap: 0;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+        margin-bottom: 20px;
+      }
+      .tb-mode-toggle button {
+        flex: 1;
+        padding: 10px 20px;
+        background: var(--surface-raised);
+        color: var(--text-muted);
+        border: none;
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.82rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .tb-mode-toggle button.active {
+        background: var(--blue-dim);
+        color: var(--blue);
+      }
+      .tb-mode-toggle button:hover:not(.active) {
+        color: var(--text);
+      }
 
-    /* Existing configs list */
-    .tb-configs {
-      margin-top: 20px;
-    }
-    .tb-config-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 14px;
-      background: var(--surface-raised);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      margin-bottom: 8px;
-    }
-    .tb-config-mode {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.82rem;
-      font-weight: 700;
-      text-transform: uppercase;
-    }
-    .tb-config-mode.wsb { color: var(--green); }
-    .tb-config-mode.inverse { color: var(--red); }
-    .tb-config-key {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.78rem;
-      color: var(--text-muted);
-    }
-    .tb-config-paper {
-      font-size: 0.68rem;
-      font-weight: 700;
-      padding: 3px 8px;
-      border-radius: 4px;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-    }
-    .tb-config-paper.paper {
-      background: var(--yellow-dim);
-      color: var(--yellow);
-    }
-    .tb-config-paper.live {
-      background: var(--red-dim);
-      color: var(--red);
-    }
-  </style>
-</head>
-<body>
-  <header>
-    <h1>WSB INVERSE TRACKER</h1>
-    <div class="status">
-      <span class="dot" id="statusDot"></span>
-      <span id="statusText">CONNECTING...</span>
+      /* Existing configs list */
+      .tb-configs {
+        margin-top: 20px;
+      }
+      .tb-config-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 14px;
+        background: var(--surface-raised);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        margin-bottom: 8px;
+      }
+      .tb-config-mode {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.82rem;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+      .tb-config-mode.wsb {
+        color: var(--green);
+      }
+      .tb-config-mode.inverse {
+        color: var(--red);
+      }
+      .tb-config-key {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.78rem;
+        color: var(--text-muted);
+      }
+      .tb-config-paper {
+        font-size: 0.68rem;
+        font-weight: 700;
+        padding: 3px 8px;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .tb-config-paper.paper {
+        background: var(--yellow-dim);
+        color: var(--yellow);
+      }
+      .tb-config-paper.live {
+        background: var(--red-dim);
+        color: var(--red);
+      }
+
+      /* Active Bots overview card */
+      .tb-bots-overview {
+        margin-bottom: 20px;
+      }
+      .tb-bots-overview h2 {
+        margin-bottom: 16px;
+      }
+      .tb-bot-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        background: var(--surface-raised);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        margin-bottom: 8px;
+        transition: border-color 0.2s;
+      }
+      .tb-bot-row:hover {
+        border-color: var(--blue);
+      }
+      .tb-bot-row-info {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .tb-bot-row-mode {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.85rem;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+      .tb-bot-row-mode.inverse {
+        color: var(--red);
+      }
+      .tb-bot-row-mode.wsb {
+        color: var(--green);
+      }
+      .tb-bot-row-equity {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.82rem;
+        color: var(--text);
+        margin-left: auto;
+      }
+      .tb-bot-row-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .tb-bot-row-actions .tb-btn {
+        padding: 6px 14px;
+        font-size: 0.75rem;
+      }
+      .tb-no-bots {
+        color: var(--text-muted);
+        font-size: 0.82rem;
+        font-style: italic;
+        padding: 20px 0;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>WSB INVERSE TRACKER</h1>
+      <div class="status">
+        <span class="dot" id="statusDot"></span>
+        <span id="statusText">CONNECTING...</span>
+      </div>
+    </header>
+    <nav>
+      <a href="#" class="active" data-page="dashboard">Dashboard</a>
+      <a href="#" data-page="history">Historical</a>
+      <a href="#" data-page="tradebot">Trade Bot</a>
+    </nav>
+
+    <!-- Dashboard Page -->
+    <div class="page active" id="page-dashboard">
+      <div class="container">
+        <div class="grid-main">
+          <!-- Sentiment Card -->
+          <div class="card">
+            <div class="meta-row">
+              <h2>WSB Sentiment</h2>
+              <span class="thread-badge daily" id="threadBadge">DAILY</span>
+            </div>
+            <div class="chart-wrap">
+              <canvas id="sentimentPie"></canvas>
+            </div>
+            <div class="stats-row">
+              <div class="stat-pill bullish">
+                <span id="bullishPct">--</span>
+                <span class="stat-label">BULL</span>
+              </div>
+              <div class="stat-pill bearish">
+                <span id="bearishPct">--</span>
+                <span class="stat-label">BEAR</span>
+              </div>
+            </div>
+            <div class="sentiment-bar-wrap">
+              <div class="sentiment-bar-labels">
+                <span class="bull" id="barBullLabel">0%</span>
+                <span class="bear" id="barBearLabel">0%</span>
+              </div>
+              <div class="sentiment-bar">
+                <div class="fill" id="sentimentFill" style="width: 50%"></div>
+              </div>
+            </div>
+            <div class="total-comments">
+              <span id="totalComments">0</span> comments analyzed
+            </div>
+          </div>
+
+          <!-- Recommendation Card -->
+          <div class="card recommendation">
+            <div class="rec-label">Inverse Recommendation</div>
+            <div class="rec-tagline hold" id="recTagline">&nbsp;</div>
+            <div class="action hold" id="recommendation">--</div>
+            <div class="rec-explanation" id="recExplanation">
+              Waiting for data...
+            </div>
+            <div class="rec-scorecard" id="recScorecard">
+              <canvas id="scorecardPie" width="100" height="100"></canvas>
+              <div class="rec-scorecard-legend" id="scorecardLegend"></div>
+            </div>
+          </div>
+
+          <!-- Cramer Index Card -->
+          <div class="card cramer-card" id="cramerCard">
+            <div class="cramer-label">Inverse Cramer</div>
+            <div class="cramer-tagline hold" id="cramerTagline">&nbsp;</div>
+            <div class="cramer-action hold" id="cramerAction">--</div>
+            <div class="cramer-comparison" id="cramerComparison"></div>
+            <div class="cramer-picks-summary">
+              <span class="bulls" id="cramerBulls">0 bullish</span>
+              <span class="bears" id="cramerBears">0 bearish</span>
+              <span class="neutrals" id="cramerNeutrals">0 neutral</span>
+            </div>
+            <div class="cramer-recent" id="cramerRecent"></div>
+          </div>
+        </div>
+        <!-- SPY Scorecard -->
+        <div class="card spy-card" id="spyCard" style="display: none">
+          <div class="spy-header">
+            <div class="spy-price-row">
+              <span class="spy-ticker">SPY</span>
+              <span class="spy-price-big" id="spyPrice">--</span>
+              <span class="spy-daily-change flat" id="spyChange">--</span>
+              <span class="spy-market-state closed" id="spyMarketState"
+                >CLOSED</span
+              >
+            </div>
+          </div>
+          <div class="spy-verdict" id="spyVerdict">
+            <div class="spy-verdict-text no-data" id="spyVerdictText">
+              Loading scorecard...
+            </div>
+            <div class="spy-verdict-sub" id="spyVerdictSub"></div>
+          </div>
+          <div class="spy-streak" id="spyStreak">
+            <span class="spy-streak-label">Last 5:</span>
+          </div>
+        </div>
+        <!-- Hardware Monitor -->
+        <div class="card hw-card" id="hwCard">
+          <div class="hw-label">System</div>
+          <div class="hw-stats">
+            <div class="hw-stat">
+              <span class="hw-stat-label">CPU</span>
+              <span class="hw-stat-value" id="hwCpu">--%</span>
+              <div class="hw-bar">
+                <div
+                  class="hw-bar-fill green"
+                  id="hwCpuBar"
+                  style="width: 0%"
+                ></div>
+              </div>
+              <span class="hw-stat-sub" id="hwCpuSub">--</span>
+            </div>
+            <div class="hw-stat">
+              <span class="hw-stat-label">RAM</span>
+              <span class="hw-stat-value" id="hwRam">--%</span>
+              <div class="hw-bar">
+                <div
+                  class="hw-bar-fill green"
+                  id="hwRamBar"
+                  style="width: 0%"
+                ></div>
+              </div>
+              <span class="hw-stat-sub" id="hwRamSub">--</span>
+            </div>
+            <div class="hw-stat">
+              <span class="hw-stat-label">Net RX</span>
+              <span class="hw-stat-value" id="hwNetRx">--</span>
+            </div>
+            <div class="hw-stat">
+              <span class="hw-stat-label">Net TX</span>
+              <span class="hw-stat-value" id="hwNetTx">--</span>
+            </div>
+          </div>
+          <div class="hw-uptime" id="hwUptime">--</div>
+        </div>
+
+        <div class="updated" id="lastUpdated"></div>
+      </div>
     </div>
-  </header>
-  <nav>
-    <a href="#" class="active" data-page="dashboard">Dashboard</a>
-    <a href="#" data-page="history">Historical</a>
-    <a href="#" data-page="tradebot">Trade Bot</a>
-  </nav>
 
-  <!-- Dashboard Page -->
-  <div class="page active" id="page-dashboard">
-    <div class="container">
-      <div class="grid-main">
-        <!-- Sentiment Card -->
+    <!-- History Page -->
+    <div class="page" id="page-history">
+      <div class="container">
         <div class="card">
-          <div class="meta-row">
-            <h2>WSB Sentiment</h2>
-            <span class="thread-badge daily" id="threadBadge">DAILY</span>
-          </div>
-          <div class="chart-wrap">
-            <canvas id="sentimentPie"></canvas>
-          </div>
-          <div class="stats-row">
-            <div class="stat-pill bullish">
-              <span id="bullishPct">--</span>
-              <span class="stat-label">BULL</span>
-            </div>
-            <div class="stat-pill bearish">
-              <span id="bearishPct">--</span>
-              <span class="stat-label">BEAR</span>
-            </div>
-          </div>
-          <div class="sentiment-bar-wrap">
-            <div class="sentiment-bar-labels">
-              <span class="bull" id="barBullLabel">0%</span>
-              <span class="bear" id="barBearLabel">0%</span>
-            </div>
-            <div class="sentiment-bar">
-              <div class="fill" id="sentimentFill" style="width:50%"></div>
-            </div>
-          </div>
-          <div class="total-comments">
-            <span id="totalComments">0</span> comments analyzed
+          <h2>90-Day Sentiment History vs SPY</h2>
+          <div class="history-chart-wrap">
+            <canvas id="historyChart"></canvas>
           </div>
         </div>
-
-        <!-- Recommendation Card -->
-        <div class="card recommendation">
-          <div class="rec-label">Inverse Recommendation</div>
-          <div class="rec-tagline hold" id="recTagline">&nbsp;</div>
-          <div class="action hold" id="recommendation">--</div>
-          <div class="rec-explanation" id="recExplanation">Waiting for data...</div>
-          <div class="rec-scorecard" id="recScorecard">
-            <canvas id="scorecardPie" width="100" height="100"></canvas>
-            <div class="rec-scorecard-legend" id="scorecardLegend"></div>
+        <div class="card" style="margin-top: 20px">
+          <h2>Inverse Strategy Accuracy</h2>
+          <div class="history-chart-wrap">
+            <canvas id="accuracyChart"></canvas>
           </div>
-        </div>
-
-        <!-- Cramer Index Card -->
-        <div class="card cramer-card" id="cramerCard">
-          <div class="cramer-label">Inverse Cramer</div>
-          <div class="cramer-tagline hold" id="cramerTagline">&nbsp;</div>
-          <div class="cramer-action hold" id="cramerAction">--</div>
-          <div class="cramer-comparison" id="cramerComparison"></div>
-          <div class="cramer-picks-summary">
-            <span class="bulls" id="cramerBulls">0 bullish</span>
-            <span class="bears" id="cramerBears">0 bearish</span>
-            <span class="neutrals" id="cramerNeutrals">0 neutral</span>
-          </div>
-          <div class="cramer-recent" id="cramerRecent"></div>
-        </div>
-      </div>
-      <!-- SPY Scorecard -->
-      <div class="card spy-card" id="spyCard" style="display:none;">
-        <div class="spy-header">
-          <div class="spy-price-row">
-            <span class="spy-ticker">SPY</span>
-            <span class="spy-price-big" id="spyPrice">--</span>
-            <span class="spy-daily-change flat" id="spyChange">--</span>
-            <span class="spy-market-state closed" id="spyMarketState">CLOSED</span>
-          </div>
-        </div>
-        <div class="spy-verdict" id="spyVerdict">
-          <div class="spy-verdict-text no-data" id="spyVerdictText">Loading scorecard...</div>
-          <div class="spy-verdict-sub" id="spyVerdictSub"></div>
-        </div>
-        <div class="spy-streak" id="spyStreak">
-          <span class="spy-streak-label">Last 5:</span>
-        </div>
-      </div>
-      <!-- Hardware Monitor -->
-      <div class="card hw-card" id="hwCard">
-        <div class="hw-label">System</div>
-        <div class="hw-stats">
-          <div class="hw-stat">
-            <span class="hw-stat-label">CPU</span>
-            <span class="hw-stat-value" id="hwCpu">--%</span>
-            <div class="hw-bar"><div class="hw-bar-fill green" id="hwCpuBar" style="width:0%"></div></div>
-            <span class="hw-stat-sub" id="hwCpuSub">--</span>
-          </div>
-          <div class="hw-stat">
-            <span class="hw-stat-label">RAM</span>
-            <span class="hw-stat-value" id="hwRam">--%</span>
-            <div class="hw-bar"><div class="hw-bar-fill green" id="hwRamBar" style="width:0%"></div></div>
-            <span class="hw-stat-sub" id="hwRamSub">--</span>
-          </div>
-          <div class="hw-stat">
-            <span class="hw-stat-label">Net RX</span>
-            <span class="hw-stat-value" id="hwNetRx">--</span>
-          </div>
-          <div class="hw-stat">
-            <span class="hw-stat-label">Net TX</span>
-            <span class="hw-stat-value" id="hwNetTx">--</span>
-          </div>
-        </div>
-        <div class="hw-uptime" id="hwUptime">--</div>
-      </div>
-
-      <div class="updated" id="lastUpdated"></div>
-    </div>
-  </div>
-
-  <!-- History Page -->
-  <div class="page" id="page-history">
-    <div class="container">
-      <div class="card">
-        <h2>90-Day Sentiment History vs SPY</h2>
-        <div class="history-chart-wrap">
-          <canvas id="historyChart"></canvas>
-        </div>
-      </div>
-      <div class="card" style="margin-top:20px;">
-        <h2>Inverse Strategy Accuracy</h2>
-        <div class="history-chart-wrap">
-          <canvas id="accuracyChart"></canvas>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- Trade Bot Page -->
-  <div class="page" id="page-tradebot">
-    <div class="container">
-      <!-- Mode toggle -->
-      <div class="tb-mode-toggle">
-        <button class="active" data-tbmode="inverse">Inverse WSB</button>
-        <button data-tbmode="wsb">Follow WSB</button>
-      </div>
-
-      <div class="tb-grid">
-        <!-- Setup Card -->
+    <!-- Trade Bot Page -->
+    <div class="page" id="page-tradebot">
+      <div class="container">
+        <!-- Account Setup Card -->
         <div class="card tb-setup-card">
           <h2>Account Setup</h2>
           <div class="tb-configs" id="tbConfigs"></div>
-          <div class="tb-form-group" style="margin-top:20px;">
+          <div class="tb-form-group" style="margin-top: 20px">
             <label for="tbMode">Strategy Mode</label>
             <select class="tb-select" id="tbMode">
-              <option value="inverse">Inverse WSB (bet against the herd)</option>
+              <option value="inverse">
+                Inverse WSB (bet against the herd)
+              </option>
               <option value="wsb">Follow WSB (ride the wave)</option>
             </select>
           </div>
           <div class="tb-form-group">
             <label for="tbApiKey">Alpaca API Key ID</label>
-            <input type="text" class="tb-input" id="tbApiKey" placeholder="PK...">
+            <input
+              type="text"
+              class="tb-input"
+              id="tbApiKey"
+              placeholder="PK..."
+            />
           </div>
           <div class="tb-form-group">
             <label for="tbApiSecret">Alpaca API Secret Key</label>
-            <input type="password" class="tb-input" id="tbApiSecret" placeholder="Your secret key">
+            <input
+              type="password"
+              class="tb-input"
+              id="tbApiSecret"
+              placeholder="Your secret key"
+            />
           </div>
           <div class="tb-checkbox-row">
-            <input type="checkbox" id="tbPaper" checked>
+            <input type="checkbox" id="tbPaper" checked />
             <label for="tbPaper">Paper Trading (recommended for testing)</label>
           </div>
           <div class="tb-btn-row">
-            <button class="tb-btn tb-btn-primary" id="tbSaveBtn" onclick="saveTradeBotConfig()">Save & Verify</button>
+            <button
+              class="tb-btn tb-btn-primary"
+              id="tbSaveBtn"
+              onclick="saveTradeBotConfig()"
+            >
+              Save & Verify
+            </button>
           </div>
           <div class="tb-msg" id="tbSetupMsg"></div>
         </div>
 
-        <!-- Status Card -->
-        <div class="card tb-status-card">
-          <h2>Bot Status</h2>
-          <div class="tb-status-row">
-            <div class="tb-bot-badge stopped" id="tbBotBadge">
-              <span class="tb-dot"></span>
-              <span id="tbBotBadgeText">STOPPED</span>
+        <!-- Trade Types Card -->
+        <div class="card" style="margin-top: 20px">
+          <h2>Trade Settings</h2>
+          <div class="tb-form-group" style="margin-top: 12px">
+            <label>Trade Type</label>
+            <div class="tb-mode-toggle">
+              <button class="active" data-tradetype="0dte">0DTE Options</button>
             </div>
-            <div class="tb-btn-row">
-              <button class="tb-btn tb-btn-success" id="tbStartBtn" onclick="startTradeBot()">Start</button>
-              <button class="tb-btn tb-btn-danger" id="tbStopBtn" onclick="stopTradeBot()" style="display:none;">Stop</button>
-            </div>
-          </div>
-
-          <div class="tb-account-stats" id="tbAccountStats" style="display:none;">
-            <div class="tb-account-stat">
-              <div class="tb-account-stat-label">Equity</div>
-              <div class="tb-account-stat-value" id="tbEquity">--</div>
-            </div>
-            <div class="tb-account-stat">
-              <div class="tb-account-stat-label">Cash</div>
-              <div class="tb-account-stat-value" id="tbCash">--</div>
+            <div
+              style="
+                color: var(--text-muted);
+                font-size: 0.75rem;
+                margin-top: 6px;
+              "
+            >
+              Single trade per day &mdash; SPY 0DTE calls or puts based on
+              sentiment signal.
             </div>
           </div>
-
-          <div class="tb-positions" id="tbPositions">
-            <h3>Open Positions</h3>
-            <div class="tb-no-positions" id="tbNoPositions">No open positions</div>
-            <div id="tbPositionsList"></div>
+          <div class="tb-form-group">
+            <label>Risk Level</label>
+            <div class="tb-mode-toggle" id="tbRiskToggle">
+              <button class="active" data-risk="safe">Safe</button>
+              <button data-risk="degen">Degen</button>
+              <button data-risk="yolo">YOLO</button>
+            </div>
+            <div
+              style="
+                color: var(--text-muted);
+                font-size: 0.75rem;
+                margin-top: 6px;
+              "
+              id="tbRiskDesc"
+            >
+              Conservative position sizing. Capital preservation first.
+            </div>
           </div>
-
-          <div class="tb-msg" id="tbStatusMsg"></div>
         </div>
-      </div>
 
-      <!-- Trade Log -->
-      <div class="card tb-log-card">
-        <h2>Trade Log</h2>
-        <div id="tbLogContent">
-          <div class="tb-log-empty">No trades yet. The bot will log trades here once started.</div>
+        <!-- Bot Status Card -->
+        <div class="card tb-bots-overview" style="margin-top: 20px">
+          <h2>Bot Status</h2>
+          <div id="tbBotsOverview">
+            <div class="tb-no-bots">
+              No accounts configured. Add one above to get started.
+            </div>
+          </div>
+        </div>
+
+        <!-- Trade Log -->
+        <div class="card tb-log-card">
+          <h2>Trade Log</h2>
+          <div id="tbLogContent">
+            <div class="tb-log-empty">
+              No trades yet. The bot will log trades here once started.
+            </div>
+          </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <script>
-    let pieChart = null;
-    let historyChartInstance = null;
-    let accuracyChartInstance = null;
+    <script>
+      let pieChart = null;
+      let historyChartInstance = null;
+      let accuracyChartInstance = null;
 
-    // Navigation
-    document.querySelectorAll('nav a').forEach(link => {
-      link.addEventListener('click', (e) => {
-        e.preventDefault();
-        const page = link.dataset.page;
-        document.querySelectorAll('nav a').forEach(l => l.classList.remove('active'));
-        link.classList.add('active');
-        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-        document.getElementById('page-' + page).classList.add('active');
-        if (page === 'history') loadHistory();
-        if (page === 'tradebot') {
-          fetchTradeBotConfigs();
-          fetchTradeBotStatus();
-          fetchTradeBotLogs();
-        }
+      // Navigation
+      document.querySelectorAll("nav a").forEach((link) => {
+        link.addEventListener("click", (e) => {
+          e.preventDefault();
+          const page = link.dataset.page;
+          document
+            .querySelectorAll("nav a")
+            .forEach((l) => l.classList.remove("active"));
+          link.classList.add("active");
+          document
+            .querySelectorAll(".page")
+            .forEach((p) => p.classList.remove("active"));
+          document.getElementById("page-" + page).classList.add("active");
+          if (page === "history") loadHistory();
+          if (page === "tradebot") {
+            fetchTradeBotConfigs();
+            fetchAllBotStatuses();
+            fetchTradeBotLogs();
+          }
+        });
       });
-    });
 
-    async function fetchSentiment() {
-      try {
-        const res = await fetch('/api/sentiment/today');
-        const data = await res.json();
+      async function fetchSentiment() {
+        try {
+          const res = await fetch("/api/sentiment/today");
+          const data = await res.json();
 
-        document.getElementById('statusDot').style.background = '#00ff87';
-        document.getElementById('statusText').textContent = 'LIVE';
+          document.getElementById("statusDot").style.background = "#00ff87";
+          document.getElementById("statusText").textContent = "LIVE";
 
-        const badge = document.getElementById('threadBadge');
-        badge.textContent = data.threadType.toUpperCase();
-        badge.className = 'thread-badge ' + data.threadType;
+          const badge = document.getElementById("threadBadge");
+          badge.textContent = data.threadType.toUpperCase();
+          badge.className = "thread-badge " + data.threadType;
 
-        if (!data.sentiment) {
-          document.getElementById('bullishPct').textContent = '--';
-          document.getElementById('bearishPct').textContent = '--';
-          document.getElementById('totalComments').textContent = '0';
-          document.getElementById('recommendation').textContent = 'WAIT';
-          document.getElementById('recommendation').className = 'action hold';
-          document.getElementById('recTagline').textContent = '';
-          document.getElementById('recTagline').className = 'rec-tagline hold';
-          document.getElementById('recExplanation').textContent = 'Collecting data from WSB...';
-          document.getElementById('sentimentFill').style.width = '50%';
-          document.getElementById('barBullLabel').textContent = '0%';
-          document.getElementById('barBearLabel').textContent = '0%';
-          updatePieChart(0, 0);
+          if (!data.sentiment) {
+            document.getElementById("bullishPct").textContent = "--";
+            document.getElementById("bearishPct").textContent = "--";
+            document.getElementById("totalComments").textContent = "0";
+            document.getElementById("recommendation").textContent = "WAIT";
+            document.getElementById("recommendation").className = "action hold";
+            document.getElementById("recTagline").textContent = "";
+            document.getElementById("recTagline").className =
+              "rec-tagline hold";
+            document.getElementById("recExplanation").textContent =
+              "Collecting data from WSB...";
+            document.getElementById("sentimentFill").style.width = "50%";
+            document.getElementById("barBullLabel").textContent = "0%";
+            document.getElementById("barBearLabel").textContent = "0%";
+            updatePieChart(0, 0);
+            return;
+          }
+
+          const s = data.sentiment;
+          // Recalculate bullish vs bearish only (exclude neutral)
+          const bullBearTotal = s.bullishCount + s.bearishCount;
+          let bullPct, bearPct;
+          if (bullBearTotal === 0) {
+            bullPct = 50;
+            bearPct = 50;
+          } else {
+            bullPct =
+              Math.round((s.bullishCount / bullBearTotal) * 10000) / 100;
+            bearPct =
+              Math.round((s.bearishCount / bullBearTotal) * 10000) / 100;
+          }
+
+          document.getElementById("bullishPct").textContent =
+            bullPct.toFixed(1) + "%";
+          document.getElementById("bearishPct").textContent =
+            bearPct.toFixed(1) + "%";
+          document.getElementById("totalComments").textContent =
+            s.totalComments.toLocaleString();
+
+          // Sentiment bar
+          document.getElementById("sentimentFill").style.width = bullPct + "%";
+          document.getElementById("barBullLabel").textContent =
+            bullPct.toFixed(1) + "%";
+          document.getElementById("barBearLabel").textContent =
+            bearPct.toFixed(1) + "%";
+
+          const rec = s.recommendation;
+          const recEl = document.getElementById("recommendation");
+          recEl.textContent = rec;
+          recEl.className = "action " + rec.toLowerCase();
+
+          const taglines = {
+            CALLS: [
+              "Believe it or not, calls.",
+              "Bears in shambles. Calls it is.",
+              "WSB says crash? Time for calls.",
+              "Inverse the fear. Load calls.",
+              "They never learn. Calls.",
+            ],
+            PUTS: [
+              "Fucking bulls. Puts it is.",
+              "WSB too greedy. Puts time.",
+              "Euphoria detected. Grab puts.",
+              "They're about to learn. Puts.",
+              "Rug pull incoming. Puts.",
+            ],
+            HOLD: [
+              "Too close to call. Sit tight.",
+              "Even the degens are confused.",
+              "No edge here. Hold.",
+            ],
+          };
+          const taglineList = taglines[rec];
+          const tagline =
+            taglineList[Math.floor(Math.random() * taglineList.length)];
+          const taglineEl = document.getElementById("recTagline");
+          taglineEl.textContent = tagline;
+          taglineEl.className = "rec-tagline " + rec.toLowerCase();
+
+          const explanations = {
+            CALLS: "WSB is bearish \u2014 inverse says buy calls on SPY",
+            PUTS: "WSB is bullish \u2014 inverse says buy puts on SPY",
+            HOLD: "No strong signal \u2014 sentiment is mixed",
+          };
+          document.getElementById("recExplanation").textContent =
+            explanations[rec];
+
+          updatePieChart(bullPct, bearPct);
+          document.getElementById("lastUpdated").textContent =
+            "Updated " + new Date().toLocaleTimeString();
+        } catch {
+          document.getElementById("statusDot").style.background = "#ff3b5c";
+          document.getElementById("statusText").textContent = "ERROR";
+        }
+      }
+
+      function updatePieChart(bullish, bearish) {
+        const ctx = document.getElementById("sentimentPie").getContext("2d");
+
+        if (pieChart) {
+          pieChart.data.datasets[0].data = [bullish, bearish];
+          pieChart.update();
           return;
         }
 
-        const s = data.sentiment;
-        // Recalculate bullish vs bearish only (exclude neutral)
-        const bullBearTotal = s.bullishCount + s.bearishCount;
-        let bullPct, bearPct;
-        if (bullBearTotal === 0) {
-          bullPct = 50;
-          bearPct = 50;
-        } else {
-          bullPct = Math.round((s.bullishCount / bullBearTotal) * 10000) / 100;
-          bearPct = Math.round((s.bearishCount / bullBearTotal) * 10000) / 100;
-        }
-
-        document.getElementById('bullishPct').textContent = bullPct.toFixed(1) + '%';
-        document.getElementById('bearishPct').textContent = bearPct.toFixed(1) + '%';
-        document.getElementById('totalComments').textContent = s.totalComments.toLocaleString();
-
-        // Sentiment bar
-        document.getElementById('sentimentFill').style.width = bullPct + '%';
-        document.getElementById('barBullLabel').textContent = bullPct.toFixed(1) + '%';
-        document.getElementById('barBearLabel').textContent = bearPct.toFixed(1) + '%';
-
-        const rec = s.recommendation;
-        const recEl = document.getElementById('recommendation');
-        recEl.textContent = rec;
-        recEl.className = 'action ' + rec.toLowerCase();
-
-        const taglines = {
-          CALLS: [
-            'Believe it or not, calls.',
-            'Bears in shambles. Calls it is.',
-            'WSB says crash? Time for calls.',
-            'Inverse the fear. Load calls.',
-            'They never learn. Calls.',
-          ],
-          PUTS: [
-            'Fucking bulls. Puts it is.',
-            'WSB too greedy. Puts time.',
-            'Euphoria detected. Grab puts.',
-            'They\'re about to learn. Puts.',
-            'Rug pull incoming. Puts.',
-          ],
-          HOLD: [
-            'Too close to call. Sit tight.',
-            'Even the degens are confused.',
-            'No edge here. Hold.',
-          ]
-        };
-        const taglineList = taglines[rec];
-        const tagline = taglineList[Math.floor(Math.random() * taglineList.length)];
-        const taglineEl = document.getElementById('recTagline');
-        taglineEl.textContent = tagline;
-        taglineEl.className = 'rec-tagline ' + rec.toLowerCase();
-
-        const explanations = {
-          CALLS: 'WSB is bearish \u2014 inverse says buy calls on SPY',
-          PUTS: 'WSB is bullish \u2014 inverse says buy puts on SPY',
-          HOLD: 'No strong signal \u2014 sentiment is mixed'
-        };
-        document.getElementById('recExplanation').textContent = explanations[rec];
-
-        updatePieChart(bullPct, bearPct);
-        document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
-      } catch {
-        document.getElementById('statusDot').style.background = '#ff3b5c';
-        document.getElementById('statusText').textContent = 'ERROR';
-      }
-    }
-
-    function updatePieChart(bullish, bearish) {
-      const ctx = document.getElementById('sentimentPie').getContext('2d');
-
-      if (pieChart) {
-        pieChart.data.datasets[0].data = [bullish, bearish];
-        pieChart.update();
-        return;
-      }
-
-      pieChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-          labels: ['Bullish', 'Bearish'],
-          datasets: [{
-            data: [bullish, bearish],
-            backgroundColor: [
-              'rgba(0, 255, 135, 0.85)',
-              'rgba(255, 59, 92, 0.85)',
+        pieChart = new Chart(ctx, {
+          type: "doughnut",
+          data: {
+            labels: ["Bullish", "Bearish"],
+            datasets: [
+              {
+                data: [bullish, bearish],
+                backgroundColor: [
+                  "rgba(0, 255, 135, 0.85)",
+                  "rgba(255, 59, 92, 0.85)",
+                ],
+                borderColor: "transparent",
+                borderWidth: 0,
+                hoverBackgroundColor: ["#00ff87", "#ff3b5c"],
+                spacing: 4,
+              },
             ],
-            borderColor: 'transparent',
-            borderWidth: 0,
-            hoverBackgroundColor: ['#00ff87', '#ff3b5c'],
-            spacing: 4,
-          }]
-        },
-        options: {
-          responsive: true,
-          cutout: '72%',
-          plugins: {
-            legend: {
-              display: true,
-              position: 'bottom',
-              labels: {
-                color: '#6e7a88',
-                padding: 16,
-                font: { size: 11, family: 'JetBrains Mono', weight: '500' },
-                usePointStyle: true,
-                pointStyleWidth: 8,
-              }
+          },
+          options: {
+            responsive: true,
+            cutout: "72%",
+            plugins: {
+              legend: {
+                display: true,
+                position: "bottom",
+                labels: {
+                  color: "#6e7a88",
+                  padding: 16,
+                  font: { size: 11, family: "JetBrains Mono", weight: "500" },
+                  usePointStyle: true,
+                  pointStyleWidth: 8,
+                },
+              },
+              tooltip: {
+                backgroundColor: "#141a23",
+                borderColor: "#1e2732",
+                borderWidth: 1,
+                cornerRadius: 8,
+                titleFont: { family: "JetBrains Mono", size: 12 },
+                bodyFont: { family: "JetBrains Mono", size: 11 },
+                callbacks: {
+                  label: function (ctx) {
+                    return " " + ctx.label + ": " + ctx.parsed.toFixed(1) + "%";
+                  },
+                },
+              },
             },
-            tooltip: {
-              backgroundColor: '#141a23',
-              borderColor: '#1e2732',
-              borderWidth: 1,
-              cornerRadius: 8,
-              titleFont: { family: 'JetBrains Mono', size: 12 },
-              bodyFont: { family: 'JetBrains Mono', size: 11 },
-              callbacks: {
-                label: function(ctx) {
-                  return ' ' + ctx.label + ': ' + ctx.parsed.toFixed(1) + '%';
-                }
-              }
-            }
-          }
-        }
-      });
-    }
-
-    async function loadHistory() {
-      try {
-        const [sentRes, histRes] = await Promise.all([
-          fetch('/api/sentiment/history?days=90'),
-          fetch('/api/historical?days=90')
-        ]);
-        const sentData = await sentRes.json();
-        const histData = await histRes.json();
-
-        renderHistoryChart(sentData.entries, histData.entries);
-        renderAccuracyChart(histData.entries);
-      } catch {
-        /* silently fail */
-      }
-    }
-
-    function renderHistoryChart(entries, historicalEntries) {
-      const ctx = document.getElementById('historyChart').getContext('2d');
-      if (historyChartInstance) historyChartInstance.destroy();
-
-      if (!entries.length) {
-        ctx.canvas.parentElement.innerHTML = '<div class="no-data">No historical data yet. Check back after a few days.</div>';
-        return;
-      }
-
-      // Build a map of date -> spy close price from historical entries
-      const spyMap = {};
-      if (historicalEntries) {
-        for (const h of historicalEntries) {
-          if (h.spyClose != null) spyMap[h.date] = h.spyClose;
-        }
-      }
-
-      const datasets = [
-        {
-          label: 'Bullish %',
-          data: entries.map(e => e.bullishPercent),
-          borderColor: '#00ff87',
-          backgroundColor: 'rgba(0,255,135,0.06)',
-          fill: true,
-          tension: 0.4,
-          borderWidth: 2,
-          pointRadius: 0,
-          pointHoverRadius: 5,
-          pointHoverBackgroundColor: '#00ff87',
-          yAxisID: 'y',
-        },
-        {
-          label: 'Bearish %',
-          data: entries.map(e => e.bearishPercent),
-          borderColor: '#ff3b5c',
-          backgroundColor: 'rgba(255,59,92,0.06)',
-          fill: true,
-          tension: 0.4,
-          borderWidth: 2,
-          pointRadius: 0,
-          pointHoverRadius: 5,
-          pointHoverBackgroundColor: '#ff3b5c',
-          yAxisID: 'y',
-        },
-      ];
-
-      // Add SPY price overlay if we have data
-      const spyDataPoints = entries.map(e => spyMap[e.date] ?? null);
-      const hasSpyData = spyDataPoints.some(v => v !== null);
-
-      if (hasSpyData) {
-        datasets.push({
-          label: 'SPY Close',
-          data: spyDataPoints,
-          borderColor: '#ffb800',
-          backgroundColor: 'transparent',
-          tension: 0.4,
-          borderWidth: 2,
-          borderDash: [6, 3],
-          pointRadius: 0,
-          pointHoverRadius: 5,
-          pointHoverBackgroundColor: '#ffb800',
-          yAxisID: 'y1',
-          spanGaps: true,
+          },
         });
       }
 
-      const scales = {
-        x: { ticks: { color: '#6e7a88', maxTicksLimit: 12, font: { size: 10, family: 'JetBrains Mono' } }, grid: { color: 'rgba(30,39,50,0.6)' } },
-        y: { position: 'left', ticks: { color: '#6e7a88', font: { size: 10, family: 'JetBrains Mono' } }, grid: { color: 'rgba(30,39,50,0.6)' }, min: 0, max: 100, title: { display: true, text: 'Sentiment %', color: '#6e7a88', font: { size: 10, family: 'JetBrains Mono' } } },
-      };
+      async function loadHistory() {
+        try {
+          const [sentRes, histRes] = await Promise.all([
+            fetch("/api/sentiment/history?days=90"),
+            fetch("/api/historical?days=90"),
+          ]);
+          const sentData = await sentRes.json();
+          const histData = await histRes.json();
 
-      if (hasSpyData) {
-        scales.y1 = {
-          position: 'right',
-          ticks: { color: '#ffb800', font: { size: 10, family: 'JetBrains Mono' } },
-          grid: { display: false },
-          title: { display: true, text: 'SPY Price', color: '#ffb800', font: { size: 10, family: 'JetBrains Mono' } },
-        };
+          renderHistoryChart(sentData.entries, histData.entries);
+          renderAccuracyChart(histData.entries);
+        } catch {
+          /* silently fail */
+        }
       }
 
-      historyChartInstance = new Chart(ctx, {
-        type: 'line',
-        data: { labels: entries.map(e => e.date), datasets },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          interaction: { intersect: false, mode: 'index' },
-          scales,
-          plugins: {
-            legend: { labels: { color: '#6e7a88', font: { size: 11, family: 'JetBrains Mono' }, usePointStyle: true, pointStyleWidth: 8 } },
-            tooltip: {
-              backgroundColor: '#141a23',
-              borderColor: '#1e2732',
-              borderWidth: 1,
-              cornerRadius: 8,
-              titleFont: { family: 'JetBrains Mono', size: 11 },
-              bodyFont: { family: 'JetBrains Mono', size: 11 },
-              callbacks: {
-                label: function(ctx) {
-                  if (ctx.dataset.yAxisID === 'y1') {
-                    return ' SPY: $' + ctx.parsed.y.toFixed(2);
-                  }
-                  return ' ' + ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(1) + '%';
-                }
-              }
-            }
+      function renderHistoryChart(entries, historicalEntries) {
+        const ctx = document.getElementById("historyChart").getContext("2d");
+        if (historyChartInstance) historyChartInstance.destroy();
+
+        if (!entries.length) {
+          ctx.canvas.parentElement.innerHTML =
+            '<div class="no-data">No historical data yet. Check back after a few days.</div>';
+          return;
+        }
+
+        // Build a map of date -> spy close price from historical entries
+        const spyMap = {};
+        if (historicalEntries) {
+          for (const h of historicalEntries) {
+            if (h.spyClose != null) spyMap[h.date] = h.spyClose;
           }
         }
-      });
-    }
 
-    function renderAccuracyChart(entries) {
-      const ctx = document.getElementById('accuracyChart').getContext('2d');
-      if (accuracyChartInstance) accuracyChartInstance.destroy();
-
-      const withOutcome = entries.filter(e => e.inverseCorrect !== null);
-
-      if (!withOutcome.length) {
-        ctx.canvas.parentElement.innerHTML = '<div class="no-data">No outcome data yet. SPY data populates as trading days pass.</div>';
-        return;
-      }
-
-      let cumCorrect = 0;
-      const accuracyData = withOutcome.map((e, i) => {
-        if (e.inverseCorrect) cumCorrect++;
-        return { date: e.date, accuracy: Math.round((cumCorrect / (i + 1)) * 100) };
-      });
-
-      const spyData = entries.filter(e => e.spyChange !== null);
-
-      accuracyChartInstance = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: accuracyData.map(d => d.date),
-          datasets: [
-            {
-              label: 'Inverse Accuracy %',
-              data: accuracyData.map(d => d.accuracy),
-              borderColor: '#58a6ff',
-              backgroundColor: 'rgba(88,166,255,0.06)',
-              fill: true,
-              tension: 0.4,
-              borderWidth: 2,
-              pointRadius: 0,
-              pointHoverRadius: 5,
-              pointHoverBackgroundColor: '#58a6ff',
-              yAxisID: 'y',
-            },
-            {
-              label: 'SPY Daily Change %',
-              data: spyData.map(d => d.spyChange),
-              borderColor: '#ffb800',
-              tension: 0.4,
-              borderWidth: 2,
-              pointRadius: 0,
-              pointHoverRadius: 5,
-              pointHoverBackgroundColor: '#ffb800',
-              yAxisID: 'y1',
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          interaction: { intersect: false, mode: 'index' },
-          scales: {
-            x: { ticks: { color: '#6e7a88', maxTicksLimit: 12, font: { size: 10, family: 'JetBrains Mono' } }, grid: { color: 'rgba(30,39,50,0.6)' } },
-            y: { position: 'left', ticks: { color: '#58a6ff', font: { size: 10, family: 'JetBrains Mono' } }, grid: { color: 'rgba(30,39,50,0.6)' }, min: 0, max: 100 },
-            y1: { position: 'right', ticks: { color: '#ffb800', font: { size: 10, family: 'JetBrains Mono' } }, grid: { display: false } }
+        const datasets = [
+          {
+            label: "Bullish %",
+            data: entries.map((e) => e.bullishPercent),
+            borderColor: "#00ff87",
+            backgroundColor: "rgba(0,255,135,0.06)",
+            fill: true,
+            tension: 0.4,
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHoverRadius: 5,
+            pointHoverBackgroundColor: "#00ff87",
+            yAxisID: "y",
           },
-          plugins: {
-            legend: { labels: { color: '#6e7a88', font: { size: 11, family: 'JetBrains Mono' }, usePointStyle: true, pointStyleWidth: 8 } },
-            tooltip: {
-              backgroundColor: '#141a23',
-              borderColor: '#1e2732',
-              borderWidth: 1,
-              cornerRadius: 8,
-              titleFont: { family: 'JetBrains Mono', size: 11 },
-              bodyFont: { family: 'JetBrains Mono', size: 11 },
-            }
-          }
-        }
-      });
-    }
+          {
+            label: "Bearish %",
+            data: entries.map((e) => e.bearishPercent),
+            borderColor: "#ff3b5c",
+            backgroundColor: "rgba(255,59,92,0.06)",
+            fill: true,
+            tension: 0.4,
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHoverRadius: 5,
+            pointHoverBackgroundColor: "#ff3b5c",
+            yAxisID: "y",
+          },
+        ];
 
-    // Real-time SPY price (every 5s)
-    let lastSpyPrice = null;
-    let flashTimeout = null;
-    async function fetchSpyRealtime() {
-      try {
-        const res = await fetch('/api/spy/realtime');
-        const data = await res.json();
-        if (!data.quote) return;
+        // Add SPY price overlay if we have data
+        const spyDataPoints = entries.map((e) => spyMap[e.date] ?? null);
+        const hasSpyData = spyDataPoints.some((v) => v !== null);
 
-        const card = document.getElementById('spyCard');
-        card.style.display = 'block';
-
-        const q = data.quote;
-        const priceEl = document.getElementById('spyPrice');
-        priceEl.textContent = '$' + q.price.toFixed(2);
-
-        // Daily overall color class
-        const dailyClass = q.change > 0 ? 'up' : q.change < 0 ? 'down' : 'flat';
-
-        // Flash on tick: bright green/red based on price movement since last update
-        if (lastSpyPrice !== null && q.price !== lastSpyPrice) {
-          const tickUp = q.price > lastSpyPrice;
-          if (flashTimeout) clearTimeout(flashTimeout);
-          priceEl.className = 'spy-price-big ' + (tickUp ? 'flash-up' : 'flash-down');
-          flashTimeout = setTimeout(() => {
-            priceEl.className = 'spy-price-big ' + dailyClass;
-          }, 50);
-        } else {
-          priceEl.className = 'spy-price-big ' + dailyClass;
-        }
-        lastSpyPrice = q.price;
-
-        const changeEl = document.getElementById('spyChange');
-        const sign = q.change >= 0 ? '+' : '';
-        changeEl.textContent = sign + q.change.toFixed(2) + ' (' + sign + q.changePercent.toFixed(2) + '%)';
-        changeEl.className = 'spy-daily-change ' + (q.change > 0 ? 'up' : q.change < 0 ? 'down' : 'flat');
-
-        const stateEl = document.getElementById('spyMarketState');
-        const stateLabels = { regular: 'MARKET OPEN', pre: 'PRE-MARKET', post: 'AFTER HOURS', closed: 'CLOSED' };
-        stateEl.textContent = stateLabels[q.marketState] || 'CLOSED';
-        stateEl.className = 'spy-market-state ' + (q.marketState || 'closed');
-      } catch {
-        /* non-critical */
-      }
-    }
-
-    // SPY scorecard — live intraday verdict (every 10s, combined with SPY realtime)
-    let lastVerdictHash = null;
-    async function fetchSpyScorecard() {
-      try {
-        const [spyRes, sentRes, scorecardRes] = await Promise.all([
-          fetch('/api/spy/realtime'),
-          fetch('/api/sentiment/today'),
-          fetch('/api/spy/scorecard'),
-        ]);
-        const spyData = await spyRes.json();
-        const sentData = await sentRes.json();
-        const scorecardData = await scorecardRes.json();
-
-        const verdictEl = document.getElementById('spyVerdictText');
-        const subEl = document.getElementById('spyVerdictSub');
-
-        const q = spyData.quote;
-        const s = sentData.sentiment;
-
-        // Live intraday verdict: compare current WSB sentiment vs SPY direction right now
-        // Always use raw bull/bear split — no HOLD gating on the scorecard
-        if (q && s && s.totalComments > 0) {
-          const spyUp = q.change > 0;
-          const spyDir = spyUp ? 'up' : 'down';
-          const spyFlat = Math.abs(q.changePercent) < 0.05;
-          const wsbBullish = s.bullishPercent > s.bearishPercent;
-          const wsbSentiment = wsbBullish ? 'bullish' : 'bearish';
-          const inverseRec = wsbBullish ? 'PUTS' : 'CALLS';
-
-          // Inverse correct when: WSB bullish + SPY down, or WSB bearish + SPY up
-          const inverseCorrect = wsbBullish ? !spyUp : spyUp;
-
-          // Build hash from sentiment + SPY direction to avoid re-randomizing
-          const hash = wsbSentiment + ':' + spyDir + ':' + (inverseCorrect ? 'W' : 'L');
-          if (hash === lastVerdictHash) return;
-          lastVerdictHash = hash;
-
-          if (spyFlat) {
-            verdictEl.textContent = 'SPY is flat. Even the market doesn\'t know what to do.';
-            verdictEl.className = 'spy-verdict-text no-data';
-            subEl.textContent = 'WSB: ' + wsbSentiment + ' (' + Math.max(s.bullishPercent, s.bearishPercent).toFixed(1) + '%) | SPY: ' + q.changePercent.toFixed(2) + '% — too close to call';
-          } else if (inverseCorrect) {
-            const verdicts = [
-              'WSB regards are wrong again. You should have done the inverse.',
-              'Inverse wins. The regards never learn.',
-              'WSB says ' + wsbSentiment + ', SPY is ' + spyDir + '. Classic.',
-              'Once again, inversing WSB prints money.',
-              'Regards in shambles. Inverse stays undefeated.',
-              'WSB: "this time it\'s different." Narrator: it wasn\'t.',
-              'Imagine following WSB advice. Couldn\'t be us.',
-            ];
-            verdictEl.textContent = verdicts[Math.floor(Math.random() * verdicts.length)];
-            verdictEl.className = 'spy-verdict-text inverse-right';
-            subEl.textContent = 'WSB: ' + wsbSentiment + ' (' + Math.max(s.bullishPercent, s.bearishPercent).toFixed(1) + '%) → Inverse: ' + inverseRec + ' → SPY: ' + spyDir + ' ' + q.changePercent.toFixed(2) + '% ✔';
-          } else {
-            const verdicts = [
-              'Well... WSB is actually right today. Even a broken clock.',
-              'The regards got lucky. You should have followed their advice.',
-              'WSB says ' + wsbSentiment + ' and SPY is ' + spyDir + '. Broken clock moment.',
-              'Inverse is losing today. WSB gets a gold star.',
-              'Against all odds, the regards are calling it.',
-              'Don\'t get used to it, regards. Inverse will be back.',
-            ];
-            verdictEl.textContent = verdicts[Math.floor(Math.random() * verdicts.length)];
-            verdictEl.className = 'spy-verdict-text inverse-wrong';
-            subEl.textContent = 'WSB: ' + wsbSentiment + ' (' + Math.max(s.bullishPercent, s.bearishPercent).toFixed(1) + '%) → Inverse: ' + inverseRec + ' → SPY: ' + spyDir + ' ' + q.changePercent.toFixed(2) + '% ✘';
-          }
-        } else {
-          if (lastVerdictHash === 'waiting') return;
-          lastVerdictHash = 'waiting';
-          verdictEl.textContent = 'Waiting for sentiment data...';
-          verdictEl.className = 'spy-verdict-text no-data';
-          subEl.textContent = 'Scorecard updates once comments are analyzed.';
-        }
-
-        // Streak dots from historical data (last 5 completed days)
-        const outcomes = scorecardData.recentOutcomes || [];
-        const streakContainer = document.getElementById('spyStreak');
-        streakContainer.innerHTML = '<span class="spy-streak-label">Last 5:</span>';
-        const streakDays = outcomes.slice(0, 5);
-        for (const day of streakDays) {
-          const dot = document.createElement('div');
-          if (day.inverseCorrect === true) {
-            dot.className = 'spy-streak-dot win';
-            dot.textContent = 'W';
-            dot.title = day.date + ': Inverse correct';
-          } else if (day.inverseCorrect === false) {
-            dot.className = 'spy-streak-dot loss';
-            dot.textContent = 'L';
-            dot.title = day.date + ': Inverse wrong';
-          } else {
-            dot.className = 'spy-streak-dot na';
-            dot.textContent = '-';
-            dot.title = day.date + ': No outcome';
-          }
-          streakContainer.appendChild(dot);
-        }
-        for (let i = streakDays.length; i < 5; i++) {
-          const dot = document.createElement('div');
-          dot.className = 'spy-streak-dot na';
-          dot.textContent = '-';
-          streakContainer.appendChild(dot);
-        }
-      } catch (err) {
-        console.warn('Scorecard fetch failed:', err);
-      }
-    }
-
-    // Cramer Index (every 5 min — data only updates every 2 hours server-side)
-    let lastCramerHash = null;
-    async function fetchCramerIndex() {
-      try {
-        const [cramerRes, sentRes] = await Promise.all([
-          fetch('/api/cramer'),
-          fetch('/api/sentiment/today'),
-        ]);
-        if (!cramerRes.ok) {
-          console.warn('Cramer API returned', cramerRes.status);
-          return;
-        }
-        const cramer = await cramerRes.json();
-        const sentData = await sentRes.json();
-        const s = sentData.sentiment;
-
-        const card = document.getElementById('cramerCard');
-
-        if (!cramer || cramer.totalPicks === 0) {
-          document.getElementById('cramerAction').textContent = '--';
-          document.getElementById('cramerAction').className = 'cramer-action hold';
-          document.getElementById('cramerTagline').textContent = 'Waiting for Cramer data...';
-          document.getElementById('cramerComparison').textContent = '';
-          return;
-        }
-
-        // Hash to avoid re-randomizing taglines
-        const hash = cramer.recommendation + ':' + cramer.totalPicks + ':' + (s ? s.recommendation : '');
-        if (hash === lastCramerHash) return;
-        lastCramerHash = hash;
-
-        const actionEl = document.getElementById('cramerAction');
-        actionEl.textContent = cramer.recommendation;
-        actionEl.className = 'cramer-action ' + cramer.recommendation.toLowerCase();
-
-        document.getElementById('cramerBulls').textContent = cramer.bullishCount + ' bullish';
-        document.getElementById('cramerBears').textContent = cramer.bearishCount + ' bearish';
-        document.getElementById('cramerNeutrals').textContent = cramer.neutralCount + ' neutral';
-
-        // Inverse Cramer taglines (same style as WSB inverse card)
-        const taglineEl = document.getElementById('cramerTagline');
-        const compEl = document.getElementById('cramerComparison');
-        const cramerDir = cramer.overallDirection;
-        const rec = cramer.recommendation;
-
-        const taglines = {
-          CALLS: [
-            'Cramer is bearish? Time for calls.',
-            'Inverse Cramer activated. Calls.',
-            'He says sell. We say calls.',
-            'Cramer crying on TV = calls.',
-            'Thanks for the signal, Jim. Calls.',
-          ],
-          PUTS: [
-            'Cramer is pumping? Puts it is.',
-            'He loves it. We buy puts.',
-            'Inverse Cramer says puts.',
-            'Jim\'s excited. That means puts.',
-            'Cramer bullish = guaranteed rug. Puts.',
-          ],
-          HOLD: [
-            'Even Cramer can\'t pick a side.',
-            'Cramer is confused. Join the club.',
-            'No signal from the inverse oracle.',
-          ]
-        };
-        const taglineList = taglines[rec];
-        taglineEl.textContent = taglineList[Math.floor(Math.random() * taglineList.length)];
-        taglineEl.className = 'cramer-tagline ' + rec.toLowerCase();
-
-        const explanations = {
-          CALLS: 'Cramer is bearish \u2014 inverse says buy calls on SPY',
-          PUTS: 'Cramer is bullish \u2014 inverse says buy puts on SPY',
-          HOLD: 'No strong signal \u2014 Cramer sentiment is mixed'
-        };
-        compEl.textContent = explanations[rec];
-
-        // Recent picks list
-        const recentEl = document.getElementById('cramerRecent');
-        recentEl.innerHTML = '';
-        const picks = cramer.recentPicks || [];
-        for (const pick of picks.slice(0, 10)) {
-          const row = document.createElement('div');
-          row.className = 'cramer-pick-row';
-          const verdictClass = pick.verdict === 'RIGHT' ? 'right' : pick.verdict === 'WRONG' ? 'wrong' : 'pending';
-          const verdictText = pick.verdict || '--';
-          row.innerHTML = '<span class="cramer-pick-ticker">' + pick.ticker + '</span>' +
-            '<span class="cramer-pick-dir ' + pick.direction + '">' + pick.direction + '</span>' +
-            '<span class="cramer-pick-date">' + pick.date + '</span>' +
-            '<span class="cramer-verdict ' + verdictClass + '">' + verdictText + '</span>';
-          recentEl.appendChild(row);
-        }
-      } catch (err) {
-        console.warn('Cramer fetch failed:', err);
-      }
-    }
-
-    function formatBytes(bytes) {
-      if (bytes < 1024) return bytes + ' B/s';
-      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB/s';
-      return (bytes / (1024 * 1024)).toFixed(2) + ' MB/s';
-    }
-
-    function formatUptime(seconds) {
-      var d = Math.floor(seconds / 86400);
-      var h = Math.floor((seconds % 86400) / 3600);
-      var m = Math.floor((seconds % 3600) / 60);
-      if (d > 0) return d + 'd ' + h + 'h ' + m + 'm';
-      if (h > 0) return h + 'h ' + m + 'm';
-      return m + 'm';
-    }
-
-    function barColor(pct) {
-      if (pct > 85) return 'red';
-      if (pct > 60) return 'yellow';
-      return 'green';
-    }
-
-    function formatMB(bytes) {
-      return (bytes / (1024 * 1024)).toFixed(0) + ' MB';
-    }
-
-    async function fetchSystemStats() {
-      try {
-        var res = await fetch('/api/system');
-        var d = await res.json();
-
-        document.getElementById('hwCpu').textContent = d.cpu.toFixed(1) + '%';
-        var cpuBar = document.getElementById('hwCpuBar');
-        cpuBar.style.width = Math.min(d.cpu, 100) + '%';
-        cpuBar.className = 'hw-bar-fill ' + barColor(d.cpu);
-        document.getElementById('hwCpuSub').textContent = d.cpuCount + 'x ' + (d.cpuModel.length > 20 ? d.cpuModel.substring(0, 20) + '...' : d.cpuModel);
-
-        document.getElementById('hwRam').textContent = d.ram.percent.toFixed(1) + '%';
-        var ramBar = document.getElementById('hwRamBar');
-        ramBar.style.width = Math.min(d.ram.percent, 100) + '%';
-        ramBar.className = 'hw-bar-fill ' + barColor(d.ram.percent);
-        document.getElementById('hwRamSub').textContent = formatMB(d.ram.used) + ' / ' + formatMB(d.ram.total);
-
-        document.getElementById('hwNetRx').textContent = formatBytes(d.network.rxBytesPerSec);
-        document.getElementById('hwNetTx').textContent = formatBytes(d.network.txBytesPerSec);
-
-        document.getElementById('hwUptime').textContent = d.hostname + ' up ' + formatUptime(d.uptime);
-      } catch (err) {
-        console.warn('System stats fetch failed:', err);
-      }
-    }
-
-    let scorecardPieChart = null;
-
-    async function fetchInverseScorecard() {
-      try {
-        var res = await fetch('/api/inverse-scorecard');
-        var d = await res.json();
-        if (d.total === 0) return;
-
-        var legend = document.getElementById('scorecardLegend');
-        legend.innerHTML =
-          '<div class="sc-row"><span class="sc-dot" style="background:var(--green)"></span>' +
-          '<span class="sc-label">Right</span><span class="sc-value">' + d.right + ' (' + d.rightPercent + '%)</span></div>' +
-          '<div class="sc-row"><span class="sc-dot" style="background:var(--red)"></span>' +
-          '<span class="sc-label">Wrong</span><span class="sc-value">' + d.wrong + ' (' + d.wrongPercent + '%)</span></div>' +
-          '<div class="sc-row"><span class="sc-label" style="font-size:0.6rem">Last 30 days</span></div>';
-
-        var ctx = document.getElementById('scorecardPie').getContext('2d');
-        if (scorecardPieChart) {
-          scorecardPieChart.data.datasets[0].data = [d.right, d.wrong];
-          scorecardPieChart.update();
-        } else {
-          scorecardPieChart = new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-              labels: ['Right', 'Wrong'],
-              datasets: [{
-                data: [d.right, d.wrong],
-                backgroundColor: ['#00ff87', '#ff3b5c'],
-                borderWidth: 0,
-                hoverOffset: 2
-              }]
-            },
-            options: {
-              responsive: false,
-              cutout: '60%',
-              plugins: {
-                legend: { display: false },
-                tooltip: {
-                  callbacks: {
-                    label: function(ctx) { return ctx.label + ': ' + ctx.raw; }
-                  }
-                }
-              }
-            }
+        if (hasSpyData) {
+          datasets.push({
+            label: "SPY Close",
+            data: spyDataPoints,
+            borderColor: "#ffb800",
+            backgroundColor: "transparent",
+            tension: 0.4,
+            borderWidth: 2,
+            borderDash: [6, 3],
+            pointRadius: 0,
+            pointHoverRadius: 5,
+            pointHoverBackgroundColor: "#ffb800",
+            yAxisID: "y1",
+            spanGaps: true,
           });
         }
-      } catch (err) {
-        console.warn('Inverse scorecard fetch failed:', err);
+
+        const scales = {
+          x: {
+            ticks: {
+              color: "#6e7a88",
+              maxTicksLimit: 12,
+              font: { size: 10, family: "JetBrains Mono" },
+            },
+            grid: { color: "rgba(30,39,50,0.6)" },
+          },
+          y: {
+            position: "left",
+            ticks: {
+              color: "#6e7a88",
+              font: { size: 10, family: "JetBrains Mono" },
+            },
+            grid: { color: "rgba(30,39,50,0.6)" },
+            min: 0,
+            max: 100,
+            title: {
+              display: true,
+              text: "Sentiment %",
+              color: "#6e7a88",
+              font: { size: 10, family: "JetBrains Mono" },
+            },
+          },
+        };
+
+        if (hasSpyData) {
+          scales.y1 = {
+            position: "right",
+            ticks: {
+              color: "#ffb800",
+              font: { size: 10, family: "JetBrains Mono" },
+            },
+            grid: { display: false },
+            title: {
+              display: true,
+              text: "SPY Price",
+              color: "#ffb800",
+              font: { size: 10, family: "JetBrains Mono" },
+            },
+          };
+        }
+
+        historyChartInstance = new Chart(ctx, {
+          type: "line",
+          data: { labels: entries.map((e) => e.date), datasets },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { intersect: false, mode: "index" },
+            scales,
+            plugins: {
+              legend: {
+                labels: {
+                  color: "#6e7a88",
+                  font: { size: 11, family: "JetBrains Mono" },
+                  usePointStyle: true,
+                  pointStyleWidth: 8,
+                },
+              },
+              tooltip: {
+                backgroundColor: "#141a23",
+                borderColor: "#1e2732",
+                borderWidth: 1,
+                cornerRadius: 8,
+                titleFont: { family: "JetBrains Mono", size: 11 },
+                bodyFont: { family: "JetBrains Mono", size: 11 },
+                callbacks: {
+                  label: function (ctx) {
+                    if (ctx.dataset.yAxisID === "y1") {
+                      return " SPY: $" + ctx.parsed.y.toFixed(2);
+                    }
+                    return (
+                      " " +
+                      ctx.dataset.label +
+                      ": " +
+                      ctx.parsed.y.toFixed(1) +
+                      "%"
+                    );
+                  },
+                },
+              },
+            },
+          },
+        });
       }
-    }
 
-    // --- Trade Bot ---
-    let tbActiveMode = 'inverse';
-    let tbPollingInterval = null;
+      function renderAccuracyChart(entries) {
+        const ctx = document.getElementById("accuracyChart").getContext("2d");
+        if (accuracyChartInstance) accuracyChartInstance.destroy();
 
-    // Mode toggle buttons
-    document.querySelectorAll('.tb-mode-toggle button').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.tb-mode-toggle button').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        tbActiveMode = btn.dataset.tbmode;
-        document.getElementById('tbMode').value = tbActiveMode;
-        fetchTradeBotStatus();
-        fetchTradeBotLogs();
-      });
-    });
+        const withOutcome = entries.filter((e) => e.inverseCorrect !== null);
 
-    async function fetchTradeBotConfigs() {
-      try {
-        const res = await fetch('/api/tradebot/configs');
-        const data = await res.json();
-        const container = document.getElementById('tbConfigs');
-        container.innerHTML = '';
-        if (!data.configs || data.configs.length === 0) {
-          container.innerHTML = '<div style="color:var(--text-muted);font-size:0.82rem;font-style:italic;">No accounts configured yet.</div>';
+        if (!withOutcome.length) {
+          ctx.canvas.parentElement.innerHTML =
+            '<div class="no-data">No outcome data yet. SPY data populates as trading days pass.</div>';
           return;
         }
-        for (const cfg of data.configs) {
-          const item = document.createElement('div');
-          item.className = 'tb-config-item';
-          item.innerHTML =
-            '<span class="tb-config-mode ' + cfg.mode + '">' + cfg.mode + '</span>' +
-            '<span class="tb-config-key">' + cfg.apiKeyId + '</span>' +
-            '<span class="tb-config-paper ' + (cfg.paperTrading ? 'paper' : 'live') + '">' +
-              (cfg.paperTrading ? 'Paper' : 'Live') + '</span>';
-          container.appendChild(item);
-        }
-      } catch (err) {
-        console.warn('Failed to fetch tradebot configs:', err);
-      }
-    }
 
-    async function saveTradeBotConfig() {
-      const mode = document.getElementById('tbMode').value;
-      const apiKeyId = document.getElementById('tbApiKey').value.trim();
-      const apiSecretKey = document.getElementById('tbApiSecret').value.trim();
-      const paperTrading = document.getElementById('tbPaper').checked;
-      const msgEl = document.getElementById('tbSetupMsg');
-      const btn = document.getElementById('tbSaveBtn');
-
-      if (!apiKeyId || !apiSecretKey) {
-        msgEl.textContent = 'Please enter both API Key ID and Secret Key.';
-        msgEl.className = 'tb-msg error';
-        return;
-      }
-
-      btn.disabled = true;
-      btn.textContent = 'Verifying...';
-      msgEl.className = 'tb-msg';
-      msgEl.style.display = 'none';
-
-      try {
-        const res = await fetch('/api/tradebot/setup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode, apiKeyId, apiSecretKey, paperTrading }),
+        let cumCorrect = 0;
+        const accuracyData = withOutcome.map((e, i) => {
+          if (e.inverseCorrect) cumCorrect++;
+          return {
+            date: e.date,
+            accuracy: Math.round((cumCorrect / (i + 1)) * 100),
+          };
         });
-        const data = await res.json();
 
-        if (res.ok && data.success) {
-          msgEl.textContent = 'Account verified! Equity: $' + parseFloat(data.account.equity).toLocaleString(undefined, {minimumFractionDigits: 2});
-          msgEl.className = 'tb-msg success';
-          document.getElementById('tbApiKey').value = '';
-          document.getElementById('tbApiSecret').value = '';
-          fetchTradeBotConfigs();
-          fetchTradeBotStatus();
-        } else {
-          msgEl.textContent = data.error || 'Setup failed.';
-          msgEl.className = 'tb-msg error';
-        }
-      } catch (err) {
-        msgEl.textContent = 'Network error: ' + err.message;
-        msgEl.className = 'tb-msg error';
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Save & Verify';
-      }
-    }
+        const spyData = entries.filter((e) => e.spyChange !== null);
 
-    async function startTradeBot() {
-      const msgEl = document.getElementById('tbStatusMsg');
-      try {
-        const res = await fetch('/api/tradebot/start', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: tbActiveMode }),
+        accuracyChartInstance = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: accuracyData.map((d) => d.date),
+            datasets: [
+              {
+                label: "Inverse Accuracy %",
+                data: accuracyData.map((d) => d.accuracy),
+                borderColor: "#58a6ff",
+                backgroundColor: "rgba(88,166,255,0.06)",
+                fill: true,
+                tension: 0.4,
+                borderWidth: 2,
+                pointRadius: 0,
+                pointHoverRadius: 5,
+                pointHoverBackgroundColor: "#58a6ff",
+                yAxisID: "y",
+              },
+              {
+                label: "SPY Daily Change %",
+                data: spyData.map((d) => d.spyChange),
+                borderColor: "#ffb800",
+                tension: 0.4,
+                borderWidth: 2,
+                pointRadius: 0,
+                pointHoverRadius: 5,
+                pointHoverBackgroundColor: "#ffb800",
+                yAxisID: "y1",
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { intersect: false, mode: "index" },
+            scales: {
+              x: {
+                ticks: {
+                  color: "#6e7a88",
+                  maxTicksLimit: 12,
+                  font: { size: 10, family: "JetBrains Mono" },
+                },
+                grid: { color: "rgba(30,39,50,0.6)" },
+              },
+              y: {
+                position: "left",
+                ticks: {
+                  color: "#58a6ff",
+                  font: { size: 10, family: "JetBrains Mono" },
+                },
+                grid: { color: "rgba(30,39,50,0.6)" },
+                min: 0,
+                max: 100,
+              },
+              y1: {
+                position: "right",
+                ticks: {
+                  color: "#ffb800",
+                  font: { size: 10, family: "JetBrains Mono" },
+                },
+                grid: { display: false },
+              },
+            },
+            plugins: {
+              legend: {
+                labels: {
+                  color: "#6e7a88",
+                  font: { size: 11, family: "JetBrains Mono" },
+                  usePointStyle: true,
+                  pointStyleWidth: 8,
+                },
+              },
+              tooltip: {
+                backgroundColor: "#141a23",
+                borderColor: "#1e2732",
+                borderWidth: 1,
+                cornerRadius: 8,
+                titleFont: { family: "JetBrains Mono", size: 11 },
+                bodyFont: { family: "JetBrains Mono", size: 11 },
+              },
+            },
+          },
         });
-        const data = await res.json();
-
-        if (res.ok && data.success) {
-          msgEl.textContent = tbActiveMode.toUpperCase() + ' bot started.';
-          msgEl.className = 'tb-msg success';
-          fetchTradeBotStatus();
-        } else {
-          msgEl.textContent = data.error || 'Failed to start bot.';
-          msgEl.className = 'tb-msg error';
-        }
-      } catch (err) {
-        msgEl.textContent = 'Network error: ' + err.message;
-        msgEl.className = 'tb-msg error';
       }
-    }
 
-    async function stopTradeBot() {
-      const msgEl = document.getElementById('tbStatusMsg');
-      try {
-        const res = await fetch('/api/tradebot/stop', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: tbActiveMode }),
-        });
-        const data = await res.json();
+      // Real-time SPY price (every 5s)
+      let lastSpyPrice = null;
+      let flashTimeout = null;
+      async function fetchSpyRealtime() {
+        try {
+          const res = await fetch("/api/spy/realtime");
+          const data = await res.json();
+          if (!data.quote) return;
 
-        if (res.ok && data.success) {
-          msgEl.textContent = tbActiveMode.toUpperCase() + ' bot stopped.';
-          msgEl.className = 'tb-msg success';
-          fetchTradeBotStatus();
-        } else {
-          msgEl.textContent = data.error || 'Failed to stop bot.';
-          msgEl.className = 'tb-msg error';
-        }
-      } catch (err) {
-        msgEl.textContent = 'Network error: ' + err.message;
-        msgEl.className = 'tb-msg error';
-      }
-    }
+          const card = document.getElementById("spyCard");
+          card.style.display = "block";
 
-    async function fetchTradeBotStatus() {
-      try {
-        const res = await fetch('/api/tradebot/status?mode=' + tbActiveMode);
-        const data = await res.json();
+          const q = data.quote;
+          const priceEl = document.getElementById("spyPrice");
+          priceEl.textContent = "$" + q.price.toFixed(2);
 
-        const badge = document.getElementById('tbBotBadge');
-        const badgeText = document.getElementById('tbBotBadgeText');
-        const startBtn = document.getElementById('tbStartBtn');
-        const stopBtn = document.getElementById('tbStopBtn');
+          // Daily overall color class
+          const dailyClass =
+            q.change > 0 ? "up" : q.change < 0 ? "down" : "flat";
 
-        if (data.running) {
-          badge.className = 'tb-bot-badge running';
-          badgeText.textContent = 'RUNNING';
-          startBtn.style.display = 'none';
-          stopBtn.style.display = 'block';
-        } else {
-          badge.className = 'tb-bot-badge stopped';
-          badgeText.textContent = 'STOPPED';
-          startBtn.style.display = 'block';
-          stopBtn.style.display = 'none';
-        }
-
-        const statsEl = document.getElementById('tbAccountStats');
-        if (data.accountEquity !== null) {
-          statsEl.style.display = 'grid';
-          document.getElementById('tbEquity').textContent = '$' + data.accountEquity.toLocaleString(undefined, {minimumFractionDigits: 2});
-          document.getElementById('tbCash').textContent = '$' + data.accountCash.toLocaleString(undefined, {minimumFractionDigits: 2});
-        } else {
-          statsEl.style.display = 'none';
-        }
-
-        // Positions
-        const posListEl = document.getElementById('tbPositionsList');
-        const noPosEl = document.getElementById('tbNoPositions');
-        posListEl.innerHTML = '';
-
-        if (data.positions && data.positions.length > 0) {
-          noPosEl.style.display = 'none';
-          for (const pos of data.positions) {
-            const row = document.createElement('div');
-            row.className = 'tb-pos-row';
-            const pl = parseFloat(pos.unrealizedPl);
-            const plClass = pl >= 0 ? 'positive' : 'negative';
-            const plSign = pl >= 0 ? '+' : '';
-            row.innerHTML =
-              '<span class="tb-pos-symbol">' + pos.symbol + '</span>' +
-              '<span class="tb-pos-qty">' + pos.qty + ' shares</span>' +
-              '<span class="tb-pos-value">$' + parseFloat(pos.marketValue).toLocaleString(undefined, {minimumFractionDigits: 2}) + '</span>' +
-              '<span class="tb-pos-pl ' + plClass + '">' + plSign + '$' + pl.toFixed(2) + ' (' + (parseFloat(pos.unrealizedPlpc) * 100).toFixed(2) + '%)</span>';
-            posListEl.appendChild(row);
+          // Flash on tick: bright green/red based on price movement since last update
+          if (lastSpyPrice !== null && q.price !== lastSpyPrice) {
+            const tickUp = q.price > lastSpyPrice;
+            if (flashTimeout) clearTimeout(flashTimeout);
+            priceEl.className =
+              "spy-price-big " + (tickUp ? "flash-up" : "flash-down");
+            flashTimeout = setTimeout(() => {
+              priceEl.className = "spy-price-big " + dailyClass;
+            }, 50);
+          } else {
+            priceEl.className = "spy-price-big " + dailyClass;
           }
-        } else {
-          noPosEl.style.display = 'block';
+          lastSpyPrice = q.price;
+
+          const changeEl = document.getElementById("spyChange");
+          const sign = q.change >= 0 ? "+" : "";
+          changeEl.textContent =
+            sign +
+            q.change.toFixed(2) +
+            " (" +
+            sign +
+            q.changePercent.toFixed(2) +
+            "%)";
+          changeEl.className =
+            "spy-daily-change " +
+            (q.change > 0 ? "up" : q.change < 0 ? "down" : "flat");
+
+          const stateEl = document.getElementById("spyMarketState");
+          const stateLabels = {
+            regular: "MARKET OPEN",
+            pre: "PRE-MARKET",
+            post: "AFTER HOURS",
+            closed: "CLOSED",
+          };
+          stateEl.textContent = stateLabels[q.marketState] || "CLOSED";
+          stateEl.className = "spy-market-state " + (q.marketState || "closed");
+        } catch {
+          /* non-critical */
         }
-      } catch (err) {
-        console.warn('Trade bot status fetch failed:', err);
       }
-    }
 
-    async function fetchTradeBotLogs() {
-      try {
-        const res = await fetch('/api/tradebot/logs?mode=' + tbActiveMode + '&limit=20');
-        const data = await res.json();
-        const container = document.getElementById('tbLogContent');
+      // SPY scorecard — live intraday verdict (every 10s, combined with SPY realtime)
+      let lastVerdictHash = null;
+      async function fetchSpyScorecard() {
+        try {
+          const [spyRes, sentRes, scorecardRes] = await Promise.all([
+            fetch("/api/spy/realtime"),
+            fetch("/api/sentiment/today"),
+            fetch("/api/spy/scorecard"),
+          ]);
+          const spyData = await spyRes.json();
+          const sentData = await sentRes.json();
+          const scorecardData = await scorecardRes.json();
 
-        if (!data.logs || data.logs.length === 0) {
-          container.innerHTML = '<div class="tb-log-empty">No trades yet. The bot will log trades here once started.</div>';
+          const verdictEl = document.getElementById("spyVerdictText");
+          const subEl = document.getElementById("spyVerdictSub");
+
+          const q = spyData.quote;
+          const s = sentData.sentiment;
+
+          // Live intraday verdict: compare current WSB sentiment vs SPY direction right now
+          // Always use raw bull/bear split — no HOLD gating on the scorecard
+          if (q && s && s.totalComments > 0) {
+            const spyUp = q.change > 0;
+            const spyDir = spyUp ? "up" : "down";
+            const spyFlat = Math.abs(q.changePercent) < 0.05;
+            const wsbBullish = s.bullishPercent > s.bearishPercent;
+            const wsbSentiment = wsbBullish ? "bullish" : "bearish";
+            const inverseRec = wsbBullish ? "PUTS" : "CALLS";
+
+            // Inverse correct when: WSB bullish + SPY down, or WSB bearish + SPY up
+            const inverseCorrect = wsbBullish ? !spyUp : spyUp;
+
+            // Build hash from sentiment + SPY direction to avoid re-randomizing
+            const hash =
+              wsbSentiment + ":" + spyDir + ":" + (inverseCorrect ? "W" : "L");
+            if (hash === lastVerdictHash) return;
+            lastVerdictHash = hash;
+
+            if (spyFlat) {
+              verdictEl.textContent =
+                "SPY is flat. Even the market doesn't know what to do.";
+              verdictEl.className = "spy-verdict-text no-data";
+              subEl.textContent =
+                "WSB: " +
+                wsbSentiment +
+                " (" +
+                Math.max(s.bullishPercent, s.bearishPercent).toFixed(1) +
+                "%) | SPY: " +
+                q.changePercent.toFixed(2) +
+                "% — too close to call";
+            } else if (inverseCorrect) {
+              const verdicts = [
+                "WSB regards are wrong again. You should have done the inverse.",
+                "Inverse wins. The regards never learn.",
+                "WSB says " +
+                  wsbSentiment +
+                  ", SPY is " +
+                  spyDir +
+                  ". Classic.",
+                "Once again, inversing WSB prints money.",
+                "Regards in shambles. Inverse stays undefeated.",
+                "WSB: \"this time it's different.\" Narrator: it wasn't.",
+                "Imagine following WSB advice. Couldn't be us.",
+              ];
+              verdictEl.textContent =
+                verdicts[Math.floor(Math.random() * verdicts.length)];
+              verdictEl.className = "spy-verdict-text inverse-right";
+              subEl.textContent =
+                "WSB: " +
+                wsbSentiment +
+                " (" +
+                Math.max(s.bullishPercent, s.bearishPercent).toFixed(1) +
+                "%) → Inverse: " +
+                inverseRec +
+                " → SPY: " +
+                spyDir +
+                " " +
+                q.changePercent.toFixed(2) +
+                "% ✔";
+            } else {
+              const verdicts = [
+                "Well... WSB is actually right today. Even a broken clock.",
+                "The regards got lucky. You should have followed their advice.",
+                "WSB says " +
+                  wsbSentiment +
+                  " and SPY is " +
+                  spyDir +
+                  ". Broken clock moment.",
+                "Inverse is losing today. WSB gets a gold star.",
+                "Against all odds, the regards are calling it.",
+                "Don't get used to it, regards. Inverse will be back.",
+              ];
+              verdictEl.textContent =
+                verdicts[Math.floor(Math.random() * verdicts.length)];
+              verdictEl.className = "spy-verdict-text inverse-wrong";
+              subEl.textContent =
+                "WSB: " +
+                wsbSentiment +
+                " (" +
+                Math.max(s.bullishPercent, s.bearishPercent).toFixed(1) +
+                "%) → Inverse: " +
+                inverseRec +
+                " → SPY: " +
+                spyDir +
+                " " +
+                q.changePercent.toFixed(2) +
+                "% ✘";
+            }
+          } else {
+            if (lastVerdictHash === "waiting") return;
+            lastVerdictHash = "waiting";
+            verdictEl.textContent = "Waiting for sentiment data...";
+            verdictEl.className = "spy-verdict-text no-data";
+            subEl.textContent = "Scorecard updates once comments are analyzed.";
+          }
+
+          // Streak dots from historical data (last 5 completed days)
+          const outcomes = scorecardData.recentOutcomes || [];
+          const streakContainer = document.getElementById("spyStreak");
+          streakContainer.innerHTML =
+            '<span class="spy-streak-label">Last 5:</span>';
+          const streakDays = outcomes.slice(0, 5);
+          for (const day of streakDays) {
+            const dot = document.createElement("div");
+            if (day.inverseCorrect === true) {
+              dot.className = "spy-streak-dot win";
+              dot.textContent = "W";
+              dot.title = day.date + ": Inverse correct";
+            } else if (day.inverseCorrect === false) {
+              dot.className = "spy-streak-dot loss";
+              dot.textContent = "L";
+              dot.title = day.date + ": Inverse wrong";
+            } else {
+              dot.className = "spy-streak-dot na";
+              dot.textContent = "-";
+              dot.title = day.date + ": No outcome";
+            }
+            streakContainer.appendChild(dot);
+          }
+          for (let i = streakDays.length; i < 5; i++) {
+            const dot = document.createElement("div");
+            dot.className = "spy-streak-dot na";
+            dot.textContent = "-";
+            streakContainer.appendChild(dot);
+          }
+        } catch (err) {
+          console.warn("Scorecard fetch failed:", err);
+        }
+      }
+
+      // Cramer Index (every 5 min — data only updates every 2 hours server-side)
+      let lastCramerHash = null;
+      async function fetchCramerIndex() {
+        try {
+          const [cramerRes, sentRes] = await Promise.all([
+            fetch("/api/cramer"),
+            fetch("/api/sentiment/today"),
+          ]);
+          if (!cramerRes.ok) {
+            console.warn("Cramer API returned", cramerRes.status);
+            return;
+          }
+          const cramer = await cramerRes.json();
+          const sentData = await sentRes.json();
+          const s = sentData.sentiment;
+
+          const card = document.getElementById("cramerCard");
+
+          if (!cramer || cramer.totalPicks === 0) {
+            document.getElementById("cramerAction").textContent = "--";
+            document.getElementById("cramerAction").className =
+              "cramer-action hold";
+            document.getElementById("cramerTagline").textContent =
+              "Waiting for Cramer data...";
+            document.getElementById("cramerComparison").textContent = "";
+            return;
+          }
+
+          // Hash to avoid re-randomizing taglines
+          const hash =
+            cramer.recommendation +
+            ":" +
+            cramer.totalPicks +
+            ":" +
+            (s ? s.recommendation : "");
+          if (hash === lastCramerHash) return;
+          lastCramerHash = hash;
+
+          const actionEl = document.getElementById("cramerAction");
+          actionEl.textContent = cramer.recommendation;
+          actionEl.className =
+            "cramer-action " + cramer.recommendation.toLowerCase();
+
+          document.getElementById("cramerBulls").textContent =
+            cramer.bullishCount + " bullish";
+          document.getElementById("cramerBears").textContent =
+            cramer.bearishCount + " bearish";
+          document.getElementById("cramerNeutrals").textContent =
+            cramer.neutralCount + " neutral";
+
+          // Inverse Cramer taglines (same style as WSB inverse card)
+          const taglineEl = document.getElementById("cramerTagline");
+          const compEl = document.getElementById("cramerComparison");
+          const cramerDir = cramer.overallDirection;
+          const rec = cramer.recommendation;
+
+          const taglines = {
+            CALLS: [
+              "Cramer is bearish? Time for calls.",
+              "Inverse Cramer activated. Calls.",
+              "He says sell. We say calls.",
+              "Cramer crying on TV = calls.",
+              "Thanks for the signal, Jim. Calls.",
+            ],
+            PUTS: [
+              "Cramer is pumping? Puts it is.",
+              "He loves it. We buy puts.",
+              "Inverse Cramer says puts.",
+              "Jim's excited. That means puts.",
+              "Cramer bullish = guaranteed rug. Puts.",
+            ],
+            HOLD: [
+              "Even Cramer can't pick a side.",
+              "Cramer is confused. Join the club.",
+              "No signal from the inverse oracle.",
+            ],
+          };
+          const taglineList = taglines[rec];
+          taglineEl.textContent =
+            taglineList[Math.floor(Math.random() * taglineList.length)];
+          taglineEl.className = "cramer-tagline " + rec.toLowerCase();
+
+          const explanations = {
+            CALLS: "Cramer is bearish \u2014 inverse says buy calls on SPY",
+            PUTS: "Cramer is bullish \u2014 inverse says buy puts on SPY",
+            HOLD: "No strong signal \u2014 Cramer sentiment is mixed",
+          };
+          compEl.textContent = explanations[rec];
+
+          // Recent picks list
+          const recentEl = document.getElementById("cramerRecent");
+          recentEl.innerHTML = "";
+          const picks = cramer.recentPicks || [];
+          for (const pick of picks.slice(0, 10)) {
+            const row = document.createElement("div");
+            row.className = "cramer-pick-row";
+            const verdictClass =
+              pick.verdict === "RIGHT"
+                ? "right"
+                : pick.verdict === "WRONG"
+                  ? "wrong"
+                  : "pending";
+            const verdictText = pick.verdict || "--";
+            row.innerHTML =
+              '<span class="cramer-pick-ticker">' +
+              pick.ticker +
+              "</span>" +
+              '<span class="cramer-pick-dir ' +
+              pick.direction +
+              '">' +
+              pick.direction +
+              "</span>" +
+              '<span class="cramer-pick-date">' +
+              pick.date +
+              "</span>" +
+              '<span class="cramer-verdict ' +
+              verdictClass +
+              '">' +
+              verdictText +
+              "</span>";
+            recentEl.appendChild(row);
+          }
+        } catch (err) {
+          console.warn("Cramer fetch failed:", err);
+        }
+      }
+
+      function formatBytes(bytes) {
+        if (bytes < 1024) return bytes + " B/s";
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB/s";
+        return (bytes / (1024 * 1024)).toFixed(2) + " MB/s";
+      }
+
+      function formatUptime(seconds) {
+        var d = Math.floor(seconds / 86400);
+        var h = Math.floor((seconds % 86400) / 3600);
+        var m = Math.floor((seconds % 3600) / 60);
+        if (d > 0) return d + "d " + h + "h " + m + "m";
+        if (h > 0) return h + "h " + m + "m";
+        return m + "m";
+      }
+
+      function barColor(pct) {
+        if (pct > 85) return "red";
+        if (pct > 60) return "yellow";
+        return "green";
+      }
+
+      function formatMB(bytes) {
+        return (bytes / (1024 * 1024)).toFixed(0) + " MB";
+      }
+
+      async function fetchSystemStats() {
+        try {
+          var res = await fetch("/api/system");
+          var d = await res.json();
+
+          document.getElementById("hwCpu").textContent = d.cpu.toFixed(1) + "%";
+          var cpuBar = document.getElementById("hwCpuBar");
+          cpuBar.style.width = Math.min(d.cpu, 100) + "%";
+          cpuBar.className = "hw-bar-fill " + barColor(d.cpu);
+          document.getElementById("hwCpuSub").textContent =
+            d.cpuCount +
+            "x " +
+            (d.cpuModel.length > 20
+              ? d.cpuModel.substring(0, 20) + "..."
+              : d.cpuModel);
+
+          document.getElementById("hwRam").textContent =
+            d.ram.percent.toFixed(1) + "%";
+          var ramBar = document.getElementById("hwRamBar");
+          ramBar.style.width = Math.min(d.ram.percent, 100) + "%";
+          ramBar.className = "hw-bar-fill " + barColor(d.ram.percent);
+          document.getElementById("hwRamSub").textContent =
+            formatMB(d.ram.used) + " / " + formatMB(d.ram.total);
+
+          document.getElementById("hwNetRx").textContent = formatBytes(
+            d.network.rxBytesPerSec,
+          );
+          document.getElementById("hwNetTx").textContent = formatBytes(
+            d.network.txBytesPerSec,
+          );
+
+          document.getElementById("hwUptime").textContent =
+            d.hostname + " up " + formatUptime(d.uptime);
+        } catch (err) {
+          console.warn("System stats fetch failed:", err);
+        }
+      }
+
+      let scorecardPieChart = null;
+
+      async function fetchInverseScorecard() {
+        try {
+          var res = await fetch("/api/inverse-scorecard");
+          var d = await res.json();
+          if (d.total === 0) return;
+
+          var legend = document.getElementById("scorecardLegend");
+          legend.innerHTML =
+            '<div class="sc-row"><span class="sc-dot" style="background:var(--green)"></span>' +
+            '<span class="sc-label">Right</span><span class="sc-value">' +
+            d.right +
+            " (" +
+            d.rightPercent +
+            "%)</span></div>" +
+            '<div class="sc-row"><span class="sc-dot" style="background:var(--red)"></span>' +
+            '<span class="sc-label">Wrong</span><span class="sc-value">' +
+            d.wrong +
+            " (" +
+            d.wrongPercent +
+            "%)</span></div>" +
+            '<div class="sc-row"><span class="sc-label" style="font-size:0.6rem">Last 30 days</span></div>';
+
+          var ctx = document.getElementById("scorecardPie").getContext("2d");
+          if (scorecardPieChart) {
+            scorecardPieChart.data.datasets[0].data = [d.right, d.wrong];
+            scorecardPieChart.update();
+          } else {
+            scorecardPieChart = new Chart(ctx, {
+              type: "doughnut",
+              data: {
+                labels: ["Right", "Wrong"],
+                datasets: [
+                  {
+                    data: [d.right, d.wrong],
+                    backgroundColor: ["#00ff87", "#ff3b5c"],
+                    borderWidth: 0,
+                    hoverOffset: 2,
+                  },
+                ],
+              },
+              options: {
+                responsive: false,
+                cutout: "60%",
+                plugins: {
+                  legend: { display: false },
+                  tooltip: {
+                    callbacks: {
+                      label: function (ctx) {
+                        return ctx.label + ": " + ctx.raw;
+                      },
+                    },
+                  },
+                },
+              },
+            });
+          }
+        } catch (err) {
+          console.warn("Inverse scorecard fetch failed:", err);
+        }
+      }
+
+      // --- Trade Bot ---
+
+      async function fetchTradeBotConfigs() {
+        try {
+          const res = await fetch("/api/tradebot/configs");
+          const data = await res.json();
+          const container = document.getElementById("tbConfigs");
+          container.innerHTML = "";
+          if (!data.configs || data.configs.length === 0) {
+            container.innerHTML =
+              '<div style="color:var(--text-muted);font-size:0.82rem;font-style:italic;">No accounts configured yet.</div>';
+            return;
+          }
+          for (const cfg of data.configs) {
+            const item = document.createElement("div");
+            item.className = "tb-config-item";
+            item.innerHTML =
+              '<span class="tb-config-mode ' +
+              cfg.mode +
+              '">' +
+              cfg.mode +
+              "</span>" +
+              '<span class="tb-config-key">' +
+              cfg.apiKeyId +
+              "</span>" +
+              '<span class="tb-config-paper ' +
+              (cfg.paperTrading ? "paper" : "live") +
+              '">' +
+              (cfg.paperTrading ? "Paper" : "Live") +
+              "</span>";
+            container.appendChild(item);
+          }
+        } catch (err) {
+          console.warn("Failed to fetch tradebot configs:", err);
+        }
+      }
+
+      async function saveTradeBotConfig() {
+        const mode = document.getElementById("tbMode").value;
+        const apiKeyId = document.getElementById("tbApiKey").value.trim();
+        const apiSecretKey = document
+          .getElementById("tbApiSecret")
+          .value.trim();
+        const paperTrading = document.getElementById("tbPaper").checked;
+        const msgEl = document.getElementById("tbSetupMsg");
+        const btn = document.getElementById("tbSaveBtn");
+
+        if (!apiKeyId || !apiSecretKey) {
+          msgEl.textContent = "Please enter both API Key ID and Secret Key.";
+          msgEl.className = "tb-msg error";
           return;
         }
 
-        let html = '<table class="tb-log-table"><thead><tr>' +
-          '<th>Time</th><th>Action</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Price</th><th>Status</th>' +
-          '</tr></thead><tbody>';
+        btn.disabled = true;
+        btn.textContent = "Verifying...";
+        msgEl.className = "tb-msg";
+        msgEl.style.display = "none";
 
-        for (const log of data.logs) {
-          const sideColor = log.side === 'buy' ? 'var(--green)' : 'var(--red)';
-          html += '<tr>' +
-            '<td>' + log.timestamp + '</td>' +
-            '<td>' + log.action + '</td>' +
-            '<td style="color:var(--blue);font-weight:700;">' + log.symbol + '</td>' +
-            '<td style="color:' + sideColor + ';font-weight:700;">' + log.side.toUpperCase() + '</td>' +
-            '<td>' + log.qty + '</td>' +
-            '<td>' + (log.price ? '$' + log.price.toFixed(2) : '--') + '</td>' +
-            '<td>' + log.status + '</td>' +
-            '</tr>';
+        try {
+          const res = await fetch("/api/tradebot/setup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              mode,
+              apiKeyId,
+              apiSecretKey,
+              paperTrading,
+            }),
+          });
+          const data = await res.json();
+
+          if (res.ok && data.success) {
+            msgEl.textContent =
+              "Account verified! Equity: $" +
+              parseFloat(data.account.equity).toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              });
+            msgEl.className = "tb-msg success";
+            document.getElementById("tbApiKey").value = "";
+            document.getElementById("tbApiSecret").value = "";
+            fetchTradeBotConfigs();
+            fetchAllBotStatuses();
+          } else {
+            msgEl.textContent = data.error || "Setup failed.";
+            msgEl.className = "tb-msg error";
+          }
+        } catch (err) {
+          msgEl.textContent = "Network error: " + err.message;
+          msgEl.className = "tb-msg error";
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "Save & Verify";
         }
-
-        html += '</tbody></table>';
-        container.innerHTML = html;
-      } catch (err) {
-        console.warn('Trade bot logs fetch failed:', err);
       }
-    }
 
-    // Initial fetch + polling
-    fetchSentiment();
-    fetchSpyRealtime();
-    fetchSpyScorecard();
-    fetchCramerIndex();
-    fetchSystemStats();
-    fetchInverseScorecard();
-    setInterval(fetchSentiment, 30000);
-    setInterval(fetchSpyRealtime, 5000);
-    setInterval(fetchSpyScorecard, 10000);
-    setInterval(fetchCramerIndex, 300000);
-    setInterval(fetchSystemStats, 3000);
-    setInterval(fetchInverseScorecard, 60000);
-  </script>
-</body>
+      async function startTradeBot(mode, paperTrading) {
+        try {
+          const res = await fetch("/api/tradebot/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode, paperTrading }),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            alert(data.error || "Failed to start bot.");
+          }
+          fetchAllBotStatuses();
+        } catch (err) {
+          alert("Network error: " + err.message);
+        }
+      }
+
+      async function stopTradeBot(mode, paperTrading) {
+        try {
+          const res = await fetch("/api/tradebot/stop", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode, paperTrading }),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            alert(data.error || "Failed to stop bot.");
+          }
+          fetchAllBotStatuses();
+        } catch (err) {
+          alert("Network error: " + err.message);
+        }
+      }
+
+      async function fetchAllBotStatuses() {
+        try {
+          const res = await fetch("/api/tradebot/all-status");
+          const data = await res.json();
+          const container = document.getElementById("tbBotsOverview");
+
+          if (!data.bots || data.bots.length === 0) {
+            container.innerHTML =
+              '<div class="tb-no-bots">No accounts configured. Add one below to get started.</div>';
+            return;
+          }
+
+          container.innerHTML = "";
+          for (const bot of data.bots) {
+            const row = document.createElement("div");
+            row.className = "tb-bot-row";
+
+            const badgeClass = bot.running ? "running" : "stopped";
+            const badgeText = bot.running ? "RUNNING" : "STOPPED";
+            const paperLabel = bot.paperTrading ? "Paper" : "Live";
+            const paperClass = bot.paperTrading ? "paper" : "live";
+            const equityText =
+              bot.accountEquity !== null
+                ? "$" +
+                  bot.accountEquity.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                  })
+                : "--";
+            const btnHtml = bot.running
+              ? '<button class="tb-btn tb-btn-danger" onclick="stopTradeBot(\'' +
+                bot.mode +
+                "'," +
+                bot.paperTrading +
+                ')">Stop</button>'
+              : '<button class="tb-btn tb-btn-success" onclick="startTradeBot(\'' +
+                bot.mode +
+                "'," +
+                bot.paperTrading +
+                ')">Start</button>';
+
+            row.innerHTML =
+              '<div class="tb-bot-badge ' +
+              badgeClass +
+              '">' +
+              '<span class="tb-dot"></span>' +
+              "<span>" +
+              badgeText +
+              "</span>" +
+              "</div>" +
+              '<div class="tb-bot-row-info">' +
+              '<span class="tb-bot-row-mode ' +
+              bot.mode +
+              '">' +
+              bot.mode +
+              "</span>" +
+              '<span class="tb-config-paper ' +
+              paperClass +
+              '">' +
+              paperLabel +
+              "</span>" +
+              '<span class="tb-bot-row-equity">' +
+              equityText +
+              "</span>" +
+              "</div>" +
+              '<div class="tb-bot-row-actions">' +
+              btnHtml +
+              "</div>";
+
+            container.appendChild(row);
+
+            // Show positions inline if bot has any
+            if (bot.positions && bot.positions.length > 0) {
+              const posWrap = document.createElement("div");
+              posWrap.style.cssText =
+                "padding: 0 16px 12px 52px; margin-top: -4px;";
+              for (const pos of bot.positions) {
+                const posRow = document.createElement("div");
+                posRow.className = "tb-pos-row";
+                const pl = parseFloat(pos.unrealizedPl);
+                const plClass = pl >= 0 ? "positive" : "negative";
+                const plSign = pl >= 0 ? "+" : "";
+                posRow.innerHTML =
+                  '<span class="tb-pos-symbol">' +
+                  pos.symbol +
+                  "</span>" +
+                  '<span class="tb-pos-qty">' +
+                  pos.qty +
+                  " shares</span>" +
+                  '<span class="tb-pos-value">$' +
+                  parseFloat(pos.marketValue).toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                  }) +
+                  "</span>" +
+                  '<span class="tb-pos-pl ' +
+                  plClass +
+                  '">' +
+                  plSign +
+                  "$" +
+                  pl.toFixed(2) +
+                  " (" +
+                  (parseFloat(pos.unrealizedPlpc) * 100).toFixed(2) +
+                  "%)</span>";
+                posWrap.appendChild(posRow);
+              }
+              container.appendChild(posWrap);
+            }
+          }
+        } catch (err) {
+          console.warn("Failed to fetch bot statuses:", err);
+        }
+      }
+
+      // Risk level toggle
+      const riskDescs = {
+        safe: "Conservative position sizing. Capital preservation first.",
+        degen: "Moderate risk. Larger positions when signal is strong.",
+        yolo: "Maximum risk. Full send on high-conviction signals. Not for the faint of heart.",
+      };
+      document.querySelectorAll("#tbRiskToggle button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document
+            .querySelectorAll("#tbRiskToggle button")
+            .forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          document.getElementById("tbRiskDesc").textContent =
+            riskDescs[btn.dataset.risk] || "";
+        });
+      });
+
+      async function fetchTradeBotLogs() {
+        try {
+          const res = await fetch("/api/tradebot/logs?limit=20");
+          const data = await res.json();
+          const container = document.getElementById("tbLogContent");
+
+          if (!data.logs || data.logs.length === 0) {
+            container.innerHTML =
+              '<div class="tb-log-empty">No trades yet. The bot will log trades here once started.</div>';
+            return;
+          }
+
+          let html =
+            '<table class="tb-log-table"><thead><tr>' +
+            "<th>Time</th><th>Bot</th><th>Action</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Price</th><th>Status</th>" +
+            "</tr></thead><tbody>";
+
+          for (const log of data.logs) {
+            const sideColor =
+              log.side === "buy" ? "var(--green)" : "var(--red)";
+            html +=
+              "<tr>" +
+              "<td>" +
+              log.timestamp +
+              "</td>" +
+              '<td style="text-transform:uppercase;font-weight:700;">' +
+              log.mode +
+              "</td>" +
+              "<td>" +
+              log.action +
+              "</td>" +
+              '<td style="color:var(--blue);font-weight:700;">' +
+              log.symbol +
+              "</td>" +
+              '<td style="color:' +
+              sideColor +
+              ';font-weight:700;">' +
+              log.side.toUpperCase() +
+              "</td>" +
+              "<td>" +
+              log.qty +
+              "</td>" +
+              "<td>" +
+              (log.price ? "$" + log.price.toFixed(2) : "--") +
+              "</td>" +
+              "<td>" +
+              log.status +
+              "</td>" +
+              "</tr>";
+          }
+
+          html += "</tbody></table>";
+          container.innerHTML = html;
+        } catch (err) {
+          console.warn("Trade bot logs fetch failed:", err);
+        }
+      }
+
+      // Initial fetch + polling
+      fetchSentiment();
+      fetchSpyRealtime();
+      fetchSpyScorecard();
+      fetchCramerIndex();
+      fetchSystemStats();
+      fetchInverseScorecard();
+      setInterval(fetchSentiment, 30000);
+      setInterval(fetchSpyRealtime, 5000);
+      setInterval(fetchSpyScorecard, 10000);
+      setInterval(fetchCramerIndex, 300000);
+      setInterval(fetchSystemStats, 3000);
+      setInterval(fetchInverseScorecard, 60000);
+    </script>
+  </body>
 </html>

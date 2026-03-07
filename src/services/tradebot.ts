@@ -1,22 +1,41 @@
 import { logger } from "../lib/logger";
 import { getAccount, getPositions } from "./alpaca";
-import { getTradeBotConfig, setTradeBotEnabled } from "./database";
-import type { AlpacaCredentials, TradeBotMode, TradeBotStatus } from "../types";
+import {
+  getTradeBotConfig,
+  getAllTradeBotConfigs,
+  setTradeBotEnabled,
+} from "./database";
+import type {
+  AlpacaCredentials,
+  BotKey,
+  TradeBotMode,
+  TradeBotStatus,
+} from "../types";
+import { makeBotKey } from "../types";
 
 /**
- * In-memory state tracking whether each bot mode is actively running.
- * The actual trading rules will be implemented later — this is the framework.
+ * In-memory state tracking whether each bot instance is actively running.
+ * Keyed by BotKey (e.g. "inverse_paper", "wsb_live").
  */
-const botState: Record<TradeBotMode, { running: boolean }> = {
-  wsb: { running: false },
-  inverse: { running: false },
-};
+const botState: Map<BotKey, { running: boolean }> = new Map();
+
+function getState(key: BotKey): { running: boolean } {
+  let state = botState.get(key);
+  if (!state) {
+    state = { running: false };
+    botState.set(key, state);
+  }
+  return state;
+}
 
 /**
- * Builds AlpacaCredentials from the stored config for a given mode.
+ * Builds AlpacaCredentials from the stored config for a given mode + paper/live.
  */
-function getCredentials(mode: TradeBotMode): AlpacaCredentials | null {
-  const cfg = getTradeBotConfig(mode);
+function getCredentials(
+  mode: TradeBotMode,
+  paperTrading: boolean,
+): AlpacaCredentials | null {
+  const cfg = getTradeBotConfig(mode, paperTrading);
   if (!cfg || !cfg.apiKeyId || !cfg.apiSecretKey) return null;
   return {
     apiKeyId: cfg.apiKeyId,
@@ -26,14 +45,16 @@ function getCredentials(mode: TradeBotMode): AlpacaCredentials | null {
 }
 
 /**
- * Starts the trade bot for the given mode.
- * For now this just marks it as running — trading rules come later.
+ * Starts the trade bot for the given mode + paper/live.
  */
-export function startBot(mode: TradeBotMode): {
+export function startBot(
+  mode: TradeBotMode,
+  paperTrading: boolean,
+): {
   success: boolean;
   error?: string;
 } {
-  const creds = getCredentials(mode);
+  const creds = getCredentials(mode, paperTrading);
   if (!creds) {
     return {
       success: false,
@@ -42,56 +63,77 @@ export function startBot(mode: TradeBotMode): {
     };
   }
 
-  if (botState[mode].running) {
-    return { success: false, error: `${mode} bot is already running.` };
+  const key = makeBotKey(mode, paperTrading);
+  const state = getState(key);
+
+  if (state.running) {
+    return {
+      success: false,
+      error: `${mode} ${paperTrading ? "paper" : "live"} bot is already running.`,
+    };
   }
 
-  botState[mode].running = true;
-  setTradeBotEnabled(mode, true);
-  logger.info("Trade bot started", { mode });
+  state.running = true;
+  setTradeBotEnabled(mode, paperTrading, true);
+  logger.info("Trade bot started", { mode, paperTrading });
 
   return { success: true };
 }
 
 /**
- * Stops the trade bot for the given mode.
+ * Stops the trade bot for the given mode + paper/live.
  */
-export function stopBot(mode: TradeBotMode): {
+export function stopBot(
+  mode: TradeBotMode,
+  paperTrading: boolean,
+): {
   success: boolean;
   error?: string;
 } {
-  if (!botState[mode].running) {
-    return { success: false, error: `${mode} bot is not running.` };
+  const key = makeBotKey(mode, paperTrading);
+  const state = getState(key);
+
+  if (!state.running) {
+    return {
+      success: false,
+      error: `${mode} ${paperTrading ? "paper" : "live"} bot is not running.`,
+    };
   }
 
-  botState[mode].running = false;
-  setTradeBotEnabled(mode, false);
-  logger.info("Trade bot stopped", { mode });
+  state.running = false;
+  setTradeBotEnabled(mode, paperTrading, false);
+  logger.info("Trade bot stopped", { mode, paperTrading });
 
   return { success: true };
 }
 
 /**
- * Returns whether the bot is currently running for a mode.
+ * Returns whether the bot is currently running for a mode + paper/live.
  */
-export function isBotRunning(mode: TradeBotMode): boolean {
-  return botState[mode].running;
+export function isBotRunning(
+  mode: TradeBotMode,
+  paperTrading: boolean,
+): boolean {
+  const key = makeBotKey(mode, paperTrading);
+  return getState(key).running;
 }
 
 /**
- * Gets the full status for a trade bot mode, including live Alpaca account data.
+ * Gets the full status for a trade bot instance, including live Alpaca account data.
  */
 export async function getBotStatus(
   mode: TradeBotMode,
+  paperTrading: boolean,
 ): Promise<TradeBotStatus> {
-  const cfg = getTradeBotConfig(mode);
-  const running = botState[mode].running;
+  const cfg = getTradeBotConfig(mode, paperTrading);
+  const key = makeBotKey(mode, paperTrading);
+  const running = getState(key).running;
 
   if (!cfg || !cfg.apiKeyId) {
     return {
       running,
       mode,
-      paperTrading: true,
+      paperTrading,
       accountEquity: null,
       accountCash: null,
       lastTradeAt: null,
@@ -122,7 +164,11 @@ export async function getBotStatus(
     };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    logger.warn("Failed to fetch Alpaca status", { mode, error: message });
+    logger.warn("Failed to fetch Alpaca status", {
+      mode,
+      paperTrading,
+      error: message,
+    });
 
     return {
       running,
@@ -134,6 +180,19 @@ export async function getBotStatus(
       positions: [],
     };
   }
+}
+
+/**
+ * Gets status for ALL configured bots at once.
+ */
+export async function getAllBotStatuses(): Promise<TradeBotStatus[]> {
+  const configs = getAllTradeBotConfigs();
+  if (configs.length === 0) return [];
+
+  const statuses = await Promise.all(
+    configs.map((cfg) => getBotStatus(cfg.mode, cfg.paperTrading)),
+  );
+  return statuses;
 }
 
 /**
@@ -170,11 +229,16 @@ export async function validateCredentials(
  * mark it as running again.
  */
 export function restoreBotState(): void {
-  for (const mode of ["wsb", "inverse"] as TradeBotMode[]) {
-    const cfg = getTradeBotConfig(mode);
-    if (cfg?.enabled) {
-      botState[mode].running = true;
-      logger.info("Restored trade bot state", { mode, running: true });
+  const configs = getAllTradeBotConfigs();
+  for (const cfg of configs) {
+    if (cfg.enabled) {
+      const key = makeBotKey(cfg.mode, cfg.paperTrading);
+      getState(key).running = true;
+      logger.info("Restored trade bot state", {
+        mode: cfg.mode,
+        paperTrading: cfg.paperTrading,
+        running: true,
+      });
     }
   }
 }

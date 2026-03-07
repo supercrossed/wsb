@@ -108,7 +108,7 @@ export function initDatabase(dbPath: string): Database.Database {
       enabled INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      UNIQUE(mode)
+      UNIQUE(mode, paper_trading)
     );
 
     CREATE TABLE IF NOT EXISTS trade_log (
@@ -128,6 +128,40 @@ export function initDatabase(dbPath: string): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_trade_log_timestamp ON trade_log(timestamp);
     CREATE INDEX IF NOT EXISTS idx_trade_log_mode ON trade_log(mode);
   `);
+
+  // Migrate tradebot_config: change UNIQUE(mode) to UNIQUE(mode, paper_trading)
+  // Check if old constraint exists by trying to insert a test — just inspect schema instead
+  const tableInfo = db
+    .prepare(
+      "SELECT sql FROM sqlite_master WHERE type='table' AND name='tradebot_config'",
+    )
+    .get() as { sql: string } | undefined;
+  if (
+    tableInfo &&
+    tableInfo.sql.includes("UNIQUE(mode)") &&
+    !tableInfo.sql.includes("UNIQUE(mode, paper_trading)")
+  ) {
+    logger.info(
+      "Migrating tradebot_config: UNIQUE(mode) -> UNIQUE(mode, paper_trading)",
+    );
+    db.exec(`
+      ALTER TABLE tradebot_config RENAME TO tradebot_config_old;
+      CREATE TABLE tradebot_config (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mode TEXT NOT NULL CHECK(mode IN ('wsb', 'inverse')),
+        api_key_id TEXT NOT NULL,
+        api_secret_key TEXT NOT NULL,
+        paper_trading INTEGER NOT NULL DEFAULT 1,
+        enabled INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(mode, paper_trading)
+      );
+      INSERT INTO tradebot_config (id, mode, api_key_id, api_secret_key, paper_trading, enabled, created_at, updated_at)
+        SELECT id, mode, api_key_id, api_secret_key, paper_trading, enabled, created_at, updated_at FROM tradebot_config_old;
+      DROP TABLE tradebot_config_old;
+    `);
+  }
 
   logger.info("Database initialized", { path: dbPath });
   return db;
@@ -550,10 +584,13 @@ export function getSpyChangeByDate(): Record<string, number | null> {
 
 export function getTradeBotConfig(
   mode: TradeBotMode,
+  paperTrading: boolean,
 ): TradeBotConfig | undefined {
   const row = getDb()
-    .prepare("SELECT * FROM tradebot_config WHERE mode = ?")
-    .get(mode) as Record<string, unknown> | undefined;
+    .prepare(
+      "SELECT * FROM tradebot_config WHERE mode = ? AND paper_trading = ?",
+    )
+    .get(mode, paperTrading ? 1 : 0) as Record<string, unknown> | undefined;
 
   if (!row) return undefined;
 
@@ -597,10 +634,9 @@ export function saveTradeBotConfig(
       `
     INSERT INTO tradebot_config (mode, api_key_id, api_secret_key, paper_trading, updated_at)
     VALUES (?, ?, ?, ?, datetime('now'))
-    ON CONFLICT(mode) DO UPDATE SET
+    ON CONFLICT(mode, paper_trading) DO UPDATE SET
       api_key_id = ?,
       api_secret_key = ?,
-      paper_trading = ?,
       updated_at = datetime('now')
   `,
     )
@@ -611,18 +647,22 @@ export function saveTradeBotConfig(
       paperTrading ? 1 : 0,
       apiKeyId,
       apiSecretKey,
-      paperTrading ? 1 : 0,
     );
 }
 
-export function setTradeBotEnabled(mode: TradeBotMode, enabled: boolean): void {
+export function setTradeBotEnabled(
+  mode: TradeBotMode,
+  paperTrading: boolean,
+  enabled: boolean,
+): void {
   getDb()
     .prepare(
       `
-    UPDATE tradebot_config SET enabled = ?, updated_at = datetime('now') WHERE mode = ?
+    UPDATE tradebot_config SET enabled = ?, updated_at = datetime('now')
+    WHERE mode = ? AND paper_trading = ?
   `,
     )
-    .run(enabled ? 1 : 0, mode);
+    .run(enabled ? 1 : 0, mode, paperTrading ? 1 : 0);
 }
 
 export function insertTradeLog(log: Omit<TradeLog, "id" | "timestamp">): void {

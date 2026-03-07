@@ -87,6 +87,13 @@ export interface CramerIndex {
 // Trade bot types
 export type TradeBotMode = "wsb" | "inverse";
 
+/** Unique identifier for a bot instance: mode + paper/live */
+export type BotKey = `${TradeBotMode}_paper` | `${TradeBotMode}_live`;
+
+export function makeBotKey(mode: TradeBotMode, paper: boolean): BotKey {
+  return `${mode}_${paper ? "paper" : "live"}` as BotKey;
+}
+
 export interface AlpacaCredentials {
   apiKeyId: string;
   apiSecretKey: string;

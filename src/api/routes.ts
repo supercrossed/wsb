@@ -30,6 +30,7 @@ import {
   startBot,
   stopBot,
   getBotStatus,
+  getAllBotStatuses,
   validateCredentials,
 } from "../services/tradebot";
 import type { TradeBotMode } from "../types";
@@ -145,11 +146,9 @@ router.post("/api/seed-historical", async (req: Request, res: Response) => {
       inverseRecommendation: string;
     };
     if (!date || !wsbSentiment || !inverseRecommendation) {
-      res
-        .status(400)
-        .json({
-          error: "Missing date, wsbSentiment, or inverseRecommendation",
-        });
+      res.status(400).json({
+        error: "Missing date, wsbSentiment, or inverseRecommendation",
+      });
       return;
     }
     saveHistoricalEntry(date, wsbSentiment, inverseRecommendation);
@@ -493,16 +492,19 @@ router.post("/api/tradebot/setup", async (req: Request, res: Response) => {
 
 /**
  * POST /api/tradebot/start
- * Starts the trade bot for a given mode.
- * Body: { mode: "wsb"|"inverse" }
+ * Starts the trade bot for a given mode + paper/live.
+ * Body: { mode: "wsb"|"inverse", paperTrading: boolean }
  */
 router.post("/api/tradebot/start", (_req: Request, res: Response) => {
-  const { mode } = _req.body as { mode: TradeBotMode };
+  const { mode, paperTrading } = _req.body as {
+    mode: TradeBotMode;
+    paperTrading: boolean;
+  };
   if (mode !== "wsb" && mode !== "inverse") {
     res.status(400).json({ error: "Mode must be 'wsb' or 'inverse'" });
     return;
   }
-  const result = startBot(mode);
+  const result = startBot(mode, paperTrading ?? true);
   if (!result.success) {
     res.status(400).json({ error: result.error });
     return;
@@ -512,16 +514,19 @@ router.post("/api/tradebot/start", (_req: Request, res: Response) => {
 
 /**
  * POST /api/tradebot/stop
- * Stops the trade bot for a given mode.
- * Body: { mode: "wsb"|"inverse" }
+ * Stops the trade bot for a given mode + paper/live.
+ * Body: { mode: "wsb"|"inverse", paperTrading: boolean }
  */
 router.post("/api/tradebot/stop", (_req: Request, res: Response) => {
-  const { mode } = _req.body as { mode: TradeBotMode };
+  const { mode, paperTrading } = _req.body as {
+    mode: TradeBotMode;
+    paperTrading: boolean;
+  };
   if (mode !== "wsb" && mode !== "inverse") {
     res.status(400).json({ error: "Mode must be 'wsb' or 'inverse'" });
     return;
   }
-  const result = stopBot(mode);
+  const result = stopBot(mode, paperTrading ?? true);
   if (!result.success) {
     res.status(400).json({ error: result.error });
     return;
@@ -530,8 +535,8 @@ router.post("/api/tradebot/stop", (_req: Request, res: Response) => {
 });
 
 /**
- * GET /api/tradebot/status?mode=wsb|inverse
- * Returns live status of a trade bot including Alpaca account data.
+ * GET /api/tradebot/status?mode=wsb|inverse&paper=true|false
+ * Returns live status of a single trade bot including Alpaca account data.
  */
 router.get("/api/tradebot/status", async (req: Request, res: Response) => {
   try {
@@ -542,8 +547,23 @@ router.get("/api/tradebot/status", async (req: Request, res: Response) => {
         .json({ error: "Mode query param must be 'wsb' or 'inverse'" });
       return;
     }
-    const status = await getBotStatus(mode);
+    const paperTrading = req.query.paper !== "false";
+    const status = await getBotStatus(mode, paperTrading);
     res.json(status);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+/**
+ * GET /api/tradebot/all-status
+ * Returns live status for ALL configured bots at once.
+ */
+router.get("/api/tradebot/all-status", async (_req: Request, res: Response) => {
+  try {
+    const statuses = await getAllBotStatuses();
+    res.json({ bots: statuses });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });

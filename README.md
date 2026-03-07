@@ -48,7 +48,26 @@ Runs on an Orange Pi Zero 2 and serves a dashboard on your local network.
 - **Sentiment:** `sentiment` npm library + custom WSB lexicon + emoji scoring
 - **Market Data:** Yahoo Finance public chart API (no auth required)
 
-## Prerequisites
+## Standalone Desktop App (Windows)
+
+No Node.js or coding required. Just download and run.
+
+1. Download the latest release zip from [Releases](https://github.com/supercrossed/wsb/releases)
+2. Extract to any folder
+3. Double-click `wsb-tracker.exe`
+4. Dashboard opens automatically at `http://localhost:3000`
+
+**What's in the zip:**
+```
+wsb-tracker.exe          # Main executable
+better_sqlite3.node      # Native SQLite binding (keep next to exe)
+public/                  # Dashboard frontend files
+.env.example             # Optional configuration
+```
+
+The app creates a `data/` folder next to the exe for the SQLite database. All data is stored locally. To configure, copy `.env.example` to `.env`.
+
+## Prerequisites (Developer Setup)
 
 - Node.js 20+
 - npm
@@ -123,6 +142,17 @@ sudo systemctl list-timers wsb-updater.timer
 sudo systemctl restart wsb
 ```
 
+## Building the Standalone Exe
+
+To build the Windows exe from source (requires Node.js + npm on Windows):
+
+```bash
+npm install
+bash desktop/build-exe.sh
+```
+
+Output goes to `desktop/dist/`. Zip that folder for distribution. The native `better_sqlite3.node` binding is compiled against your local Node.js version — the exe targets the same version automatically.
+
 ## Project Structure
 
 ```
@@ -143,6 +173,11 @@ public/
   index.html             # Dashboard UI
 scripts/
   setup-pi.sh            # Orange Pi deployment script
+desktop/
+  launcher.ts            # Standalone exe entry point
+  build-exe.sh           # Build script for Windows exe
+  tsconfig.desktop.json  # TypeScript config for exe build
+  pkg.json               # pkg bundler config
 ```
 
 ## Data Retention

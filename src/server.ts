@@ -13,12 +13,13 @@ export function createServer(): express.Express {
   // API routes (before static so they always take priority)
   app.use(router);
 
-  // Serve static frontend files
-  app.use(express.static(path.resolve(__dirname, "../public")));
+  // Serve static frontend files — WSB_PUBLIC_DIR allows override for standalone exe
+  const publicDir = process.env.WSB_PUBLIC_DIR ?? path.resolve(__dirname, "../public");
+  app.use(express.static(publicDir));
 
   // SPA fallback: serve index.html for non-API routes
   app.get("/{*splat}", (_req, res) => {
-    res.sendFile(path.resolve(__dirname, "../public/index.html"));
+    res.sendFile(path.resolve(publicDir, "index.html"));
   });
 
   return app;

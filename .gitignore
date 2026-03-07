@@ -1,6 +1,7 @@
 node_modules/
 dist/
 data/
+desktop/dist/
 .env
 *.db
 *.sqlite

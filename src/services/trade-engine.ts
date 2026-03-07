@@ -19,13 +19,12 @@ import { fetchSpyRealtime } from "./spy";
 import type { AlpacaCredentials, RiskLevel, TradeBotConfig } from "../types";
 
 /**
- * Risk level → percentage of portfolio equity to risk per trade.
- * This is the max dollar amount allocated to a single 0DTE position.
+ * Risk level → percentage of portfolio equity to allocate per trade.
  */
 const RISK_ALLOCATION: Record<RiskLevel, number> = {
-  safe: 0.02, // 2% of portfolio
-  degen: 0.05, // 5% of portfolio
-  yolo: 0.1, // 10% of portfolio
+  safe: 0.2, // 20% of portfolio
+  degen: 0.5, // 50% of portfolio
+  yolo: 0.7, // 70% of portfolio
 };
 
 /** Profit target: sell when option is up 10% from entry */
@@ -41,8 +40,11 @@ const STOP_LOSS_PCT = 0.2;
  */
 const TRAILING_STOP_RATIO = 0.5;
 
-/** How far OTM to target for strikes (0.3% OTM — slightly OTM, cheaper premium) */
-const STRIKE_OTM_PERCENT = 0.003;
+/**
+ * Strike selection zone: consider contracts from ATM out to 1.5% OTM.
+ * Within this zone, pick the strike that maximizes contracts × delta-like score.
+ */
+const MAX_OTM_PERCENT = 0.015;
 
 /** Interval for monitoring open positions (ms) */
 const MONITOR_INTERVAL_MS = 15_000; // check every 15 seconds
@@ -114,12 +116,24 @@ function isNearClose(): boolean {
 }
 
 /**
- * Selects the best 0DTE option based on signal direction and SPY price.
+ * Selects the optimal 0DTE option contract to maximize potential wins.
+ *
+ * Strategy: given our budget, we want the contract that gives us the best
+ * leverage while still having a realistic chance of going ITM.
+ *
+ * For each candidate contract in the ATM → 1.5% OTM zone:
+ *   - Score = (contracts we can buy) × (proximity factor)
+ *   - Proximity factor = 1.0 at ATM, decays as strike moves OTM
+ *   - This naturally balances: cheaper OTM = more contracts (leverage)
+ *     vs closer to ATM = higher probability of profit
+ *
+ * The result: slightly OTM contracts that give us meaningful size.
  */
 async function selectOption(
   creds: AlpacaCredentials,
   signal: "CALLS" | "PUTS",
   spyPrice: number,
+  budget: number,
 ): Promise<{
   symbol: string;
   strikePrice: number;
@@ -141,70 +155,101 @@ async function selectOption(
     return null;
   }
 
-  // Target slightly OTM strike
-  const targetStrike =
-    optionType === "call"
-      ? spyPrice * (1 + STRIKE_OTM_PERCENT)
-      : spyPrice * (1 - STRIKE_OTM_PERCENT);
-
-  tradable.sort(
-    (a, b) =>
-      Math.abs(a.strikePrice - targetStrike) -
-      Math.abs(b.strikePrice - targetStrike),
-  );
-
-  const selected = tradable[0];
-
-  try {
-    const quote = await getOptionQuote(creds, selected.symbol);
-    if (quote.midPrice <= 0) {
-      logger.warn("Option mid price is zero, using ask", {
-        symbol: selected.symbol,
-      });
-      return {
-        symbol: selected.symbol,
-        strikePrice: selected.strikePrice,
-        type: optionType,
-        estimatedPrice: quote.askPrice,
-      };
+  // Filter to strikes within our selection zone (ATM to 1.5% OTM)
+  const candidates = tradable.filter((c) => {
+    if (optionType === "call") {
+      // Calls: strike at or above current price, but not too far
+      return (
+        c.strikePrice >= spyPrice &&
+        c.strikePrice <= spyPrice * (1 + MAX_OTM_PERCENT)
+      );
     }
-    return {
-      symbol: selected.symbol,
-      strikePrice: selected.strikePrice,
-      type: optionType,
-      estimatedPrice: quote.midPrice,
-    };
-  } catch {
-    if (selected.closePrice && selected.closePrice > 0) {
-      return {
-        symbol: selected.symbol,
-        strikePrice: selected.strikePrice,
-        type: optionType,
-        estimatedPrice: selected.closePrice,
-      };
-    }
-    logger.warn("Cannot price option", { symbol: selected.symbol });
-    return null;
+    // Puts: strike at or below current price, but not too far
+    return (
+      c.strikePrice <= spyPrice &&
+      c.strikePrice >= spyPrice * (1 - MAX_OTM_PERCENT)
+    );
+  });
+
+  // If no candidates in zone, fall back to nearest OTM strike
+  if (candidates.length === 0) {
+    tradable.sort((a, b) => {
+      const aOtm =
+        optionType === "call"
+          ? a.strikePrice - spyPrice
+          : spyPrice - a.strikePrice;
+      const bOtm =
+        optionType === "call"
+          ? b.strikePrice - spyPrice
+          : spyPrice - b.strikePrice;
+      // Prefer slightly OTM (positive values) over ITM
+      if (aOtm >= 0 && bOtm < 0) return -1;
+      if (aOtm < 0 && bOtm >= 0) return 1;
+      return Math.abs(aOtm) - Math.abs(bOtm);
+    });
+    candidates.push(tradable[0]);
   }
-}
 
-/**
- * Position sizing: risk_level % of portfolio equity.
- * Returns number of option contracts.
- */
-function calculatePositionSize(
-  equity: number,
-  riskLevel: RiskLevel,
-  optionPrice: number,
-): number {
-  const allocation = equity * RISK_ALLOCATION[riskLevel];
-  const contractCost = optionPrice * 100; // each contract = 100 shares
-  if (contractCost <= 0) return 0;
+  // Score each candidate: get quotes and find the best risk/reward
+  let bestScore = -1;
+  let bestOption: {
+    symbol: string;
+    strikePrice: number;
+    type: "call" | "put";
+    estimatedPrice: number;
+  } | null = null;
 
-  const contracts = Math.floor(allocation / contractCost);
-  // At least 1 contract if affordable, capped at 100
-  if (contracts === 0 && allocation >= contractCost) return 1;
-  return Math.min(Math.max(contracts, 0), 100);
+  for (const c of candidates) {
+    let price: number;
+    try {
+      const quote = await getOptionQuote(creds, c.symbol);
+      price = quote.midPrice > 0 ? quote.midPrice : quote.askPrice;
+    } catch {
+      price = c.closePrice ?? 0;
+    }
+
+    if (price <= 0) continue;
+
+    const contractCost = price * 100;
+    const numContracts = Math.floor(budget / contractCost);
+    if (numContracts < 1) continue;
+
+    // Proximity factor: 1.0 at ATM, linearly decays to 0.3 at max OTM distance
+    const otmDistance =
+      optionType === "call"
+        ? (c.strikePrice - spyPrice) / spyPrice
+        : (spyPrice - c.strikePrice) / spyPrice;
+    const proximity = Math.max(
+      0.3,
+      1.0 - (otmDistance / MAX_OTM_PERCENT) * 0.7,
+    );
+
+    // Score = contracts × proximity — maximizes leveraged exposure weighted by ITM probability
+    const score = numContracts * proximity;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestOption = {
+        symbol: c.symbol,
+        strikePrice: c.strikePrice,
+        type: optionType,
+        estimatedPrice: price,
+      };
+    }
+  }
+
+  if (bestOption) {
+    logger.info("Option selected", {
+      symbol: bestOption.symbol,
+      strike: bestOption.strikePrice,
+      price: bestOption.estimatedPrice,
+      spy: spyPrice,
+      budget,
+      score: bestScore.toFixed(1),
+    });
+  }
+
+  return bestOption;
 }
 
 /**
@@ -297,25 +342,7 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
     return;
   }
 
-  // Select option contract
-  const option = await selectOption(creds, signal, spyPrice);
-  if (!option) {
-    insertTradeLog({
-      mode: cfg.mode,
-      action: "no_contract",
-      symbol: "SPY",
-      side: "buy",
-      qty: 0,
-      price: null,
-      orderId: null,
-      status: "error",
-      message: `${signal} but no 0DTE option found (SPY $${spyPrice.toFixed(2)})`,
-    });
-    tradedToday.set(botKey, true);
-    return;
-  }
-
-  // Get account equity for position sizing
+  // Get account equity for budget calculation
   let equity: number;
   try {
     const account = await getAccount(creds);
@@ -326,11 +353,29 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
     return;
   }
 
-  const qty = calculatePositionSize(
-    equity,
-    cfg.riskLevel,
-    option.estimatedPrice,
-  );
+  const budget = equity * RISK_ALLOCATION[cfg.riskLevel];
+
+  // Select optimal option contract given our budget
+  const option = await selectOption(creds, signal, spyPrice, budget);
+  if (!option) {
+    insertTradeLog({
+      mode: cfg.mode,
+      action: "no_contract",
+      symbol: "SPY",
+      side: "buy",
+      qty: 0,
+      price: null,
+      orderId: null,
+      status: "error",
+      message: `${signal} but no 0DTE option found (SPY $${spyPrice.toFixed(2)}, budget $${budget.toFixed(2)})`,
+    });
+    tradedToday.set(botKey, true);
+    return;
+  }
+
+  // Position size: max contracts we can buy within budget
+  const contractCost = option.estimatedPrice * 100;
+  const qty = Math.min(Math.floor(budget / contractCost), 100);
   if (qty === 0) {
     insertTradeLog({
       mode: cfg.mode,
@@ -341,7 +386,7 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
       price: option.estimatedPrice,
       orderId: null,
       status: "error",
-      message: `${signal} ${option.type} $${option.strikePrice} — insufficient equity ($${equity.toFixed(2)}, ${cfg.riskLevel})`,
+      message: `${signal} ${option.type} $${option.strikePrice} — contract cost $${contractCost.toFixed(2)} > budget $${budget.toFixed(2)}`,
     });
     tradedToday.set(botKey, true);
     return;

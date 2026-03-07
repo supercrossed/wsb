@@ -1594,11 +1594,13 @@
               <option value="">-- Select a bot --</option>
             </select>
           </div>
-          <div id="tbSettingsBody" style="display:none">
+          <div id="tbSettingsBody" style="display: none">
             <div class="tb-form-group">
               <label>Trade Type</label>
               <div class="tb-mode-toggle" id="tbTradeTypeToggle">
-                <button class="active" data-tradetype="0dte">0DTE Options</button>
+                <button class="active" data-tradetype="0dte">
+                  0DTE Options
+                </button>
               </div>
               <div
                 style="
@@ -1615,9 +1617,9 @@
             <div class="tb-form-group">
               <label>Risk Level</label>
               <div class="tb-mode-toggle" id="tbRiskToggle">
-                <button class="active" data-risk="safe">Safe (2%)</button>
-                <button data-risk="degen">Degen (5%)</button>
-                <button data-risk="yolo">YOLO (10%)</button>
+                <button class="active" data-risk="safe">Safe (20%)</button>
+                <button data-risk="degen">Degen (50%)</button>
+                <button data-risk="yolo">YOLO (70%)</button>
               </div>
               <div
                 style="
@@ -1627,7 +1629,7 @@
                 "
                 id="tbRiskDesc"
               >
-                2% of portfolio equity per trade. Capital preservation first.
+                20% of portfolio equity per trade. Conservative position sizing.
               </div>
             </div>
             <button
@@ -1637,7 +1639,7 @@
             >
               Save Settings
             </button>
-            <div class="tb-msg" id="tbSettingsMsg" style="display:none"></div>
+            <div class="tb-msg" id="tbSettingsMsg" style="display: none"></div>
           </div>
           <div
             id="tbSettingsEmpty"
@@ -1648,7 +1650,8 @@
               margin-top: 8px;
             "
           >
-            Add a bot account above first, then select it here to configure trade settings.
+            Add a bot account above first, then select it here to configure
+            trade settings.
           </div>
         </div>
 
@@ -2918,9 +2921,10 @@
 
       // Risk level toggle
       const riskDescs = {
-        safe: "2% of portfolio equity per trade. Capital preservation first.",
-        degen: "5% of portfolio equity per trade. Moderate risk for stronger signals.",
-        yolo: "10% of portfolio equity per trade. Full send. Not for the faint of heart.",
+        safe: "20% of portfolio equity per trade. Conservative position sizing.",
+        degen:
+          "50% of portfolio equity per trade. Significant risk for stronger signals.",
+        yolo: "70% of portfolio equity per trade. Full send. Not for the faint of heart.",
       };
       document.querySelectorAll("#tbRiskToggle button").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -2944,8 +2948,7 @@
             " " +
             (cfg.paperTrading ? "Paper" : "Live");
           const val = cfg.mode + "_" + (cfg.paperTrading ? "paper" : "live");
-          sel.innerHTML +=
-            '<option value="' + val + '">' + label + "</option>";
+          sel.innerHTML += '<option value="' + val + '">' + label + "</option>";
         }
         if (prev) sel.value = prev;
         // Show/hide empty state
@@ -2989,7 +2992,9 @@
             .querySelectorAll("#tbRiskToggle button")
             .forEach((b) => b.classList.remove("active"));
           const riskBtn = document.querySelector(
-            '#tbRiskToggle button[data-risk="' + (cfg.riskLevel || "safe") + '"]',
+            '#tbRiskToggle button[data-risk="' +
+              (cfg.riskLevel || "safe") +
+              '"]',
           );
           if (riskBtn) {
             riskBtn.classList.add("active");

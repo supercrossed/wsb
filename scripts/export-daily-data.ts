@@ -14,7 +14,7 @@ const PROJECT_ROOT = path.resolve(__dirname, "..");
 const DB_PATH = path.join(PROJECT_ROOT, "data", "wsb.db");
 const FEED_PATH = path.join(PROJECT_ROOT, "data-feed", "historical.json");
 
-interface FeedEntry {
+interface HistoricalEntry {
   date: string;
   wsb_sentiment: string;
   inverse_recommendation: string;
@@ -24,27 +24,50 @@ interface FeedEntry {
   inverse_correct: number | null;
 }
 
+interface SentimentEntry {
+  date: string;
+  bullish_count: number;
+  bearish_count: number;
+  neutral_count: number;
+  total_comments: number;
+  bullish_percent: number;
+  bearish_percent: number;
+  neutral_percent: number;
+  recommendation: string;
+  thread_type: string;
+}
+
 function exportData(): void {
   initDatabase(DB_PATH);
 
-  const rows = getDb()
+  const historical = getDb()
     .prepare(
       `SELECT date, wsb_sentiment, inverse_recommendation, spy_open, spy_close, spy_change, inverse_correct
        FROM historical
        WHERE wsb_sentiment != 'unknown'
        ORDER BY date ASC`,
     )
-    .all() as FeedEntry[];
+    .all() as HistoricalEntry[];
+
+  const sentiment = getDb()
+    .prepare(
+      `SELECT date, bullish_count, bearish_count, neutral_count, total_comments,
+              bullish_percent, bearish_percent, neutral_percent, recommendation, thread_type
+       FROM daily_sentiment
+       ORDER BY date ASC`,
+    )
+    .all() as SentimentEntry[];
 
   const feed = {
     updated_at: new Date().toISOString(),
-    entries: rows,
+    entries: historical,
+    sentiment,
   };
 
   fs.mkdirSync(path.dirname(FEED_PATH), { recursive: true });
   fs.writeFileSync(FEED_PATH, JSON.stringify(feed, null, 2));
 
-  console.log(`Exported ${rows.length} historical entries to ${FEED_PATH}`);
+  console.log(`Exported ${historical.length} historical + ${sentiment.length} sentiment entries to ${FEED_PATH}`);
 }
 
 exportData();

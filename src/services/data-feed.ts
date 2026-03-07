@@ -14,9 +14,23 @@ interface FeedEntry {
   inverse_correct: number | null;
 }
 
+interface SentimentEntry {
+  date: string;
+  bullish_count: number;
+  bearish_count: number;
+  neutral_count: number;
+  total_comments: number;
+  bullish_percent: number;
+  bearish_percent: number;
+  neutral_percent: number;
+  recommendation: string;
+  thread_type: string;
+}
+
 interface FeedData {
   updated_at: string;
   entries: FeedEntry[];
+  sentiment?: SentimentEntry[];
 }
 
 /**
@@ -66,11 +80,46 @@ export async function importDataFeed(): Promise<void> {
           entry.inverse_correct,
         );
       }
+
+      if (feed.sentiment && feed.sentiment.length > 0) {
+        const sentimentStmt = getDb().prepare(`
+          INSERT INTO daily_sentiment (date, bullish_count, bearish_count, neutral_count, total_comments,
+            bullish_percent, bearish_percent, neutral_percent, recommendation, thread_type, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+          ON CONFLICT(date) DO UPDATE SET
+            bullish_count = excluded.bullish_count,
+            bearish_count = excluded.bearish_count,
+            neutral_count = excluded.neutral_count,
+            total_comments = excluded.total_comments,
+            bullish_percent = excluded.bullish_percent,
+            bearish_percent = excluded.bearish_percent,
+            neutral_percent = excluded.neutral_percent,
+            recommendation = excluded.recommendation,
+            thread_type = excluded.thread_type,
+            updated_at = datetime('now')
+        `);
+
+        for (const s of feed.sentiment) {
+          sentimentStmt.run(
+            s.date,
+            s.bullish_count,
+            s.bearish_count,
+            s.neutral_count,
+            s.total_comments,
+            s.bullish_percent,
+            s.bearish_percent,
+            s.neutral_percent,
+            s.recommendation,
+            s.thread_type,
+          );
+        }
+      }
     });
     transaction();
 
     logger.info("Data feed imported", {
-      entries: feed.entries.length,
+      historical: feed.entries.length,
+      sentiment: feed.sentiment?.length ?? 0,
       updatedAt: feed.updated_at,
     });
   } catch (err: unknown) {

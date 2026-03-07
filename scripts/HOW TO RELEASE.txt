@@ -6,7 +6,7 @@ Tell Claude to run the release script with a version number and changelog:
   bash scripts/release.sh 1.1.0 "Added ticker heatmap, fixed weekend thread detection"
 
 This will automatically:
-  - Build the Windows exe
+  - Build the Windows exe based on the newest project code
   - Zip it for distribution
   - Update CHANGELOG.md
   - Bump version in package.json

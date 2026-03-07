@@ -47,7 +47,7 @@ const TRAILING_STOP_RATIO = 0.5;
 const MAX_OTM_PERCENT = 0.015;
 
 /** Interval for monitoring open positions (ms) */
-const MONITOR_INTERVAL_MS = 15_000; // check every 15 seconds
+const MONITOR_INTERVAL_MS = 1_000; // check every 1 second
 
 /**
  * Tracks whether we've placed a trade today for each bot key.

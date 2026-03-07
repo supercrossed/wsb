@@ -16,6 +16,7 @@ import {
   saveTradeBotConfig,
   getAllTradeBotConfigs,
   getRecentTradeLogs,
+  updateTradeSettings,
 } from "../services/database";
 import { fetchSpyToday, fetchSpyRealtime } from "../services/spy";
 import { getActiveThreadType } from "../services/reddit";
@@ -34,7 +35,7 @@ import {
   getAllBotStatuses,
   validateCredentials,
 } from "../services/tradebot";
-import type { TradeBotMode } from "../types";
+import type { TradeBotMode, RiskLevel, TradeType } from "../types";
 import { logger } from "../lib/logger";
 import { config } from "../config";
 
@@ -590,6 +591,38 @@ router.post("/api/tradebot/delete", (_req: Request, res: Response) => {
     res.status(400).json({ error: result.error });
     return;
   }
+  res.json({ success: true });
+});
+
+/**
+ * POST /api/tradebot/settings
+ * Updates trade settings (risk level, trade type) for a bot.
+ * Body: { mode, paperTrading, riskLevel, tradeType }
+ */
+router.post("/api/tradebot/settings", (_req: Request, res: Response) => {
+  const { mode, paperTrading, riskLevel, tradeType } = _req.body as {
+    mode: TradeBotMode;
+    paperTrading: boolean;
+    riskLevel: RiskLevel;
+    tradeType: TradeType;
+  };
+  if (mode !== "wsb" && mode !== "inverse") {
+    res.status(400).json({ error: "Mode must be 'wsb' or 'inverse'" });
+    return;
+  }
+  const validRisk: RiskLevel[] = ["safe", "degen", "yolo"];
+  const validType: TradeType[] = ["0dte", "swing"];
+  if (!validRisk.includes(riskLevel)) {
+    res
+      .status(400)
+      .json({ error: "riskLevel must be 'safe', 'degen', or 'yolo'" });
+    return;
+  }
+  if (!validType.includes(tradeType)) {
+    res.status(400).json({ error: "tradeType must be '0dte' or 'swing'" });
+    return;
+  }
+  updateTradeSettings(mode, paperTrading ?? true, riskLevel, tradeType);
   res.json({ success: true });
 });
 

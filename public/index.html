@@ -1585,42 +1585,70 @@
           <div class="tb-msg" id="tbSetupMsg"></div>
         </div>
 
-        <!-- Trade Types Card -->
+        <!-- Trade Settings Card -->
         <div class="card" style="margin-top: 20px">
           <h2>Trade Settings</h2>
           <div class="tb-form-group" style="margin-top: 12px">
-            <label>Trade Type</label>
-            <div class="tb-mode-toggle">
-              <button class="active" data-tradetype="0dte">0DTE Options</button>
-            </div>
-            <div
-              style="
-                color: var(--text-muted);
-                font-size: 0.75rem;
-                margin-top: 6px;
-              "
-            >
-              Single trade per day &mdash; SPY 0DTE calls or puts based on
-              sentiment signal.
-            </div>
+            <label>Apply To</label>
+            <select id="tbSettingsBot" onchange="loadBotSettings()">
+              <option value="">-- Select a bot --</option>
+            </select>
           </div>
-          <div class="tb-form-group">
-            <label>Risk Level</label>
-            <div class="tb-mode-toggle" id="tbRiskToggle">
-              <button class="active" data-risk="safe">Safe</button>
-              <button data-risk="degen">Degen</button>
-              <button data-risk="yolo">YOLO</button>
+          <div id="tbSettingsBody" style="display:none">
+            <div class="tb-form-group">
+              <label>Trade Type</label>
+              <div class="tb-mode-toggle" id="tbTradeTypeToggle">
+                <button class="active" data-tradetype="0dte">0DTE Options</button>
+              </div>
+              <div
+                style="
+                  color: var(--text-muted);
+                  font-size: 0.75rem;
+                  margin-top: 6px;
+                "
+              >
+                One trade per day &mdash; SPY 0DTE calls or puts based on
+                sentiment signal. Buys at market open, exits on profit target
+                (+10%), stop loss (-20%), or trailing stop.
+              </div>
             </div>
-            <div
-              style="
-                color: var(--text-muted);
-                font-size: 0.75rem;
-                margin-top: 6px;
-              "
-              id="tbRiskDesc"
+            <div class="tb-form-group">
+              <label>Risk Level</label>
+              <div class="tb-mode-toggle" id="tbRiskToggle">
+                <button class="active" data-risk="safe">Safe (2%)</button>
+                <button data-risk="degen">Degen (5%)</button>
+                <button data-risk="yolo">YOLO (10%)</button>
+              </div>
+              <div
+                style="
+                  color: var(--text-muted);
+                  font-size: 0.75rem;
+                  margin-top: 6px;
+                "
+                id="tbRiskDesc"
+              >
+                2% of portfolio equity per trade. Capital preservation first.
+              </div>
+            </div>
+            <button
+              class="tb-save-btn"
+              onclick="saveTradeSettings()"
+              id="tbSettingsSaveBtn"
             >
-              Conservative position sizing. Capital preservation first.
-            </div>
+              Save Settings
+            </button>
+            <div class="tb-msg" id="tbSettingsMsg" style="display:none"></div>
+          </div>
+          <div
+            id="tbSettingsEmpty"
+            style="
+              color: var(--text-muted);
+              font-size: 0.82rem;
+              font-style: italic;
+              margin-top: 8px;
+            "
+          >
+            Add a bot account above first, then select it here to configure trade settings.
           </div>
         </div>
 
@@ -2617,6 +2645,8 @@
               "</span>";
             container.appendChild(item);
           }
+          // Also populate trade settings bot selector
+          populateBotSelector(data.configs);
         } catch (err) {
           console.warn("Failed to fetch tradebot configs:", err);
         }
@@ -2888,9 +2918,9 @@
 
       // Risk level toggle
       const riskDescs = {
-        safe: "Conservative position sizing. Capital preservation first.",
-        degen: "Moderate risk. Larger positions when signal is strong.",
-        yolo: "Maximum risk. Full send on high-conviction signals. Not for the faint of heart.",
+        safe: "2% of portfolio equity per trade. Capital preservation first.",
+        degen: "5% of portfolio equity per trade. Moderate risk for stronger signals.",
+        yolo: "10% of portfolio equity per trade. Full send. Not for the faint of heart.",
       };
       document.querySelectorAll("#tbRiskToggle button").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -2902,6 +2932,127 @@
             riskDescs[btn.dataset.risk] || "";
         });
       });
+
+      // Populate the bot selector dropdown from existing configs
+      function populateBotSelector(configs) {
+        const sel = document.getElementById("tbSettingsBot");
+        const prev = sel.value;
+        sel.innerHTML = '<option value="">-- Select a bot --</option>';
+        for (const cfg of configs) {
+          const label =
+            cfg.mode.toUpperCase() +
+            " " +
+            (cfg.paperTrading ? "Paper" : "Live");
+          const val = cfg.mode + "_" + (cfg.paperTrading ? "paper" : "live");
+          sel.innerHTML +=
+            '<option value="' + val + '">' + label + "</option>";
+        }
+        if (prev) sel.value = prev;
+        // Show/hide empty state
+        const empty = document.getElementById("tbSettingsEmpty");
+        const body = document.getElementById("tbSettingsBody");
+        if (configs.length === 0) {
+          empty.style.display = "block";
+          body.style.display = "none";
+        } else if (sel.value) {
+          loadBotSettings();
+        }
+      }
+
+      // Load current settings for the selected bot
+      async function loadBotSettings() {
+        const sel = document.getElementById("tbSettingsBot");
+        const body = document.getElementById("tbSettingsBody");
+        const empty = document.getElementById("tbSettingsEmpty");
+        if (!sel.value) {
+          body.style.display = "none";
+          empty.style.display = "block";
+          return;
+        }
+        body.style.display = "block";
+        empty.style.display = "none";
+
+        // Find the config for this bot
+        try {
+          const res = await fetch("/api/tradebot/configs");
+          const data = await res.json();
+          const [mode, acctType] = sel.value.split("_");
+          const cfg = data.configs.find(
+            (c) =>
+              c.mode === mode &&
+              (acctType === "paper" ? c.paperTrading : !c.paperTrading),
+          );
+          if (!cfg) return;
+
+          // Set risk toggle
+          document
+            .querySelectorAll("#tbRiskToggle button")
+            .forEach((b) => b.classList.remove("active"));
+          const riskBtn = document.querySelector(
+            '#tbRiskToggle button[data-risk="' + (cfg.riskLevel || "safe") + '"]',
+          );
+          if (riskBtn) {
+            riskBtn.classList.add("active");
+            document.getElementById("tbRiskDesc").textContent =
+              riskDescs[cfg.riskLevel || "safe"] || "";
+          }
+
+          // Set trade type toggle
+          document
+            .querySelectorAll("#tbTradeTypeToggle button")
+            .forEach((b) => b.classList.remove("active"));
+          const typeBtn = document.querySelector(
+            '#tbTradeTypeToggle button[data-tradetype="' +
+              (cfg.tradeType || "0dte") +
+              '"]',
+          );
+          if (typeBtn) typeBtn.classList.add("active");
+        } catch (err) {
+          console.warn("Failed to load bot settings:", err);
+        }
+      }
+
+      // Save trade settings for the selected bot
+      async function saveTradeSettings() {
+        const sel = document.getElementById("tbSettingsBot");
+        const msgEl = document.getElementById("tbSettingsMsg");
+        if (!sel.value) return;
+
+        const [mode, acctType] = sel.value.split("_");
+        const paperTrading = acctType === "paper";
+
+        const activeRisk = document.querySelector(
+          "#tbRiskToggle button.active",
+        );
+        const activeType = document.querySelector(
+          "#tbTradeTypeToggle button.active",
+        );
+        const riskLevel = activeRisk ? activeRisk.dataset.risk : "safe";
+        const tradeType = activeType ? activeType.dataset.tradetype : "0dte";
+
+        try {
+          const res = await fetch("/api/tradebot/settings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode, paperTrading, riskLevel, tradeType }),
+          });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            msgEl.textContent = "Settings saved.";
+            msgEl.className = "tb-msg success";
+          } else {
+            msgEl.textContent = data.error || "Save failed.";
+            msgEl.className = "tb-msg error";
+          }
+        } catch (err) {
+          msgEl.textContent = "Network error: " + err.message;
+          msgEl.className = "tb-msg error";
+        }
+        msgEl.style.display = "block";
+        setTimeout(() => {
+          msgEl.style.display = "none";
+        }, 3000);
+      }
 
       async function fetchTradeBotLogs() {
         try {

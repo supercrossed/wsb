@@ -9,8 +9,10 @@ import type {
   CramerPick,
   DailySentiment,
   HistoricalEntry,
+  RiskLevel,
   ThreadType,
   TopPost,
+  TradeType,
   TradeBotConfig,
   TradeBotMode,
   TradeLog,
@@ -107,6 +109,8 @@ export function initDatabase(dbPath: string): Database.Database {
       api_secret_key TEXT NOT NULL,
       paper_trading INTEGER NOT NULL DEFAULT 1,
       enabled INTEGER NOT NULL DEFAULT 0,
+      risk_level TEXT NOT NULL DEFAULT 'safe' CHECK(risk_level IN ('safe', 'degen', 'yolo')),
+      trade_type TEXT NOT NULL DEFAULT '0dte' CHECK(trade_type IN ('0dte', 'swing')),
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(mode, paper_trading)
@@ -162,6 +166,24 @@ export function initDatabase(dbPath: string): Database.Database {
         SELECT id, mode, api_key_id, api_secret_key, paper_trading, enabled, created_at, updated_at FROM tradebot_config_old;
       DROP TABLE tradebot_config_old;
     `);
+  }
+
+  // Migrate tradebot_config: add risk_level and trade_type columns if missing
+  const colInfo = db.prepare("PRAGMA table_info(tradebot_config)").all() as {
+    name: string;
+  }[];
+  const colNames = new Set(colInfo.map((c) => c.name));
+  if (!colNames.has("risk_level")) {
+    db.exec(
+      "ALTER TABLE tradebot_config ADD COLUMN risk_level TEXT NOT NULL DEFAULT 'safe' CHECK(risk_level IN ('safe', 'degen', 'yolo'))",
+    );
+    logger.info("Migrated tradebot_config: added risk_level column");
+  }
+  if (!colNames.has("trade_type")) {
+    db.exec(
+      "ALTER TABLE tradebot_config ADD COLUMN trade_type TEXT NOT NULL DEFAULT '0dte' CHECK(trade_type IN ('0dte', 'swing'))",
+    );
+    logger.info("Migrated tradebot_config: added trade_type column");
   }
 
   logger.info("Database initialized", { path: dbPath });
@@ -602,6 +624,8 @@ export function getTradeBotConfig(
     apiSecretKey: decrypt(row.api_secret_key as string),
     paperTrading: Boolean(row.paper_trading),
     enabled: Boolean(row.enabled),
+    riskLevel: (row.risk_level as RiskLevel) ?? "safe",
+    tradeType: (row.trade_type as TradeType) ?? "0dte",
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };
@@ -619,6 +643,8 @@ export function getAllTradeBotConfigs(): TradeBotConfig[] {
     apiSecretKey: decrypt(row.api_secret_key as string),
     paperTrading: Boolean(row.paper_trading),
     enabled: Boolean(row.enabled),
+    riskLevel: (row.risk_level as RiskLevel) ?? "safe",
+    tradeType: (row.trade_type as TradeType) ?? "0dte",
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   }));
@@ -659,6 +685,22 @@ export function setTradeBotEnabled(
   `,
     )
     .run(enabled ? 1 : 0, mode, paperTrading ? 1 : 0);
+}
+
+export function updateTradeSettings(
+  mode: TradeBotMode,
+  paperTrading: boolean,
+  riskLevel: RiskLevel,
+  tradeType: TradeType,
+): void {
+  getDb()
+    .prepare(
+      `
+    UPDATE tradebot_config SET risk_level = ?, trade_type = ?, updated_at = datetime('now')
+    WHERE mode = ? AND paper_trading = ?
+  `,
+    )
+    .run(riskLevel, tradeType, mode, paperTrading ? 1 : 0);
 }
 
 export function deleteTradeBotConfig(

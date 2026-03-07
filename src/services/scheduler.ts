@@ -23,6 +23,12 @@ import {
 import { fetchSpyPrices } from "./spy";
 import { fetchAllCramerPicks } from "./cramer";
 import { importDataFeed } from "./data-feed";
+import {
+  evaluateAndTrade,
+  closeBeforeMarketClose,
+  resetDailyTrades,
+  startPositionMonitor,
+} from "./trade-engine";
 import type { DailySentiment, ThreadType, TopPost } from "../types";
 
 let isPolling = false;
@@ -239,7 +245,8 @@ async function pollAndAnalyze(): Promise<void> {
     saveDailySentiment(dailySentiment);
 
     // Save historical entry for inverse strategy tracking
-    const wsbSentiment = bullishPercent > bearishPercent ? "bullish" : "bearish";
+    const wsbSentiment =
+      bullishPercent > bearishPercent ? "bullish" : "bearish";
     saveHistoricalEntry(tradingDate, wsbSentiment, recommendation);
 
     logger.info("Poll complete", {
@@ -287,9 +294,40 @@ export function startScheduler(): void {
 
   // Fetch Cramer picks on startup + every 2 hours
   fetchCramerData();
-  setInterval(() => {
-    fetchCramerData();
-  }, 2 * 60 * 60 * 1000);
+  setInterval(
+    () => {
+      fetchCramerData();
+    },
+    2 * 60 * 60 * 1000,
+  );
+
+  // Trade bot: reset daily tracker at 9:29 AM, then evaluate + trade at 9:30 AM (market open).
+  cron.schedule(
+    "29 9 * * 1-5",
+    () => {
+      resetDailyTrades();
+    },
+    { timezone: "America/New_York" },
+  );
+  cron.schedule(
+    "30 9 * * 1-5",
+    () => {
+      evaluateAndTrade();
+    },
+    { timezone: "America/New_York" },
+  );
+
+  // Start the position monitor (checks option prices every 15s for exit logic)
+  startPositionMonitor();
+
+  // Trade bot: close all 0DTE positions at 3:45 PM EST (15 min before close).
+  cron.schedule(
+    "45 15 * * 1-5",
+    () => {
+      closeBeforeMarketClose();
+    },
+    { timezone: "America/New_York" },
+  );
 
   // Finalize daily sentiment at 4 PM EST (market close).
   // After this point, pollAndAnalyze() writes to the next trading day.

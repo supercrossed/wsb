@@ -88,11 +88,11 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
-# 4. Create daily data feed export (pushes historical data to GitHub for exe users)
+# 4. Create hourly data feed export (pushes historical data to GitHub for exe users)
 echo "--- Creating wsb-data-feed timer ---"
 sudo tee /etc/systemd/system/wsb-data-feed.service > /dev/null << EOF
 [Unit]
-Description=WSB Daily Data Feed Export
+Description=WSB Hourly Data Feed Export
 After=network-online.target
 
 [Service]
@@ -104,10 +104,11 @@ EOF
 
 sudo tee /etc/systemd/system/wsb-data-feed.timer > /dev/null << EOF
 [Unit]
-Description=Export WSB data feed daily at 5:30 PM EST
+Description=Export WSB data feed every hour
 
 [Timer]
-OnCalendar=*-*-* 17:30:00 America/New_York
+OnBootSec=5min
+OnUnitActiveSec=1h
 Persistent=true
 
 [Install]

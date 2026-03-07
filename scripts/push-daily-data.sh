@@ -10,15 +10,17 @@ cd "$PROJECT_ROOT"
 # Export data from DB to JSON
 npx tsx scripts/export-daily-data.ts
 
-# Check if anything changed
-if git diff --quiet data-feed/historical.json 2>/dev/null; then
+# Stage the file first so we can detect both new and modified
+git add data-feed/historical.json
+
+# Check if anything is staged
+if git diff --cached --quiet; then
   echo "No changes to historical data, skipping push."
   exit 0
 fi
 
 # Commit and push
-git add data-feed/historical.json
-git commit -m "chore: update daily historical data feed $(date +%Y-%m-%d)"
+git commit -m "chore: update historical data feed $(date +%Y-%m-%d)"
 git push
 
 echo "Daily data feed pushed to GitHub."

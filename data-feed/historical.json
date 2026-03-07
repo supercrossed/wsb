@@ -1,0 +1,23 @@
+{
+  "updated_at": "2026-03-07T01:34:12.702Z",
+  "entries": [
+    {
+      "date": "2026-03-06",
+      "wsb_sentiment": "bullish",
+      "inverse_recommendation": "PUTS",
+      "spy_open": 673.41,
+      "spy_close": 672.38,
+      "spy_change": -1.03,
+      "inverse_correct": 1
+    },
+    {
+      "date": "2026-03-09",
+      "wsb_sentiment": "bullish",
+      "inverse_recommendation": "HOLD",
+      "spy_open": null,
+      "spy_close": null,
+      "spy_change": null,
+      "inverse_correct": null
+    }
+  ]
+}

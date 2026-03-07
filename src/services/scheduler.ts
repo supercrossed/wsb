@@ -22,6 +22,7 @@ import {
 } from "./database";
 import { fetchSpyPrices } from "./spy";
 import { fetchAllCramerPicks } from "./cramer";
+import { importDataFeed } from "./data-feed";
 import type { DailySentiment, ThreadType, TopPost } from "../types";
 
 let isPolling = false;
@@ -262,6 +263,9 @@ export function startScheduler(): void {
   // Poll for new comments at the configured interval
   const intervalMs = config.sentiment.pollIntervalMs;
   logger.info("Starting comment poller", { intervalMs });
+
+  // Import historical data feed from GitHub (fills in missed days for exe users)
+  importDataFeed();
 
   // Initial poll + SPY backfill
   pollAndAnalyze();

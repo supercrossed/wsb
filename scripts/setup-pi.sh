@@ -88,7 +88,33 @@ Persistent=true
 WantedBy=timers.target
 EOF
 
-# 4. Allow the app user to restart wsb without a password
+# 4. Create daily data feed export (pushes historical data to GitHub for exe users)
+echo "--- Creating wsb-data-feed timer ---"
+sudo tee /etc/systemd/system/wsb-data-feed.service > /dev/null << EOF
+[Unit]
+Description=WSB Daily Data Feed Export
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=$USER
+WorkingDirectory=$WSB_DIR
+ExecStart=/bin/bash $WSB_DIR/scripts/push-daily-data.sh
+EOF
+
+sudo tee /etc/systemd/system/wsb-data-feed.timer > /dev/null << EOF
+[Unit]
+Description=Export WSB data feed daily at 5:30 PM EST
+
+[Timer]
+OnCalendar=*-*-* 17:30:00 America/New_York
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+# 5. Allow the app user to restart wsb without a password
 echo "--- Configuring sudoers for passwordless restart ---"
 sudo tee /etc/sudoers.d/wsb-updater > /dev/null << EOF
 $USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart wsb
@@ -100,8 +126,10 @@ echo "--- Enabling services ---"
 sudo systemctl daemon-reload
 sudo systemctl enable wsb
 sudo systemctl enable wsb-updater.timer
+sudo systemctl enable wsb-data-feed.timer
 sudo systemctl start wsb
 sudo systemctl start wsb-updater.timer
+sudo systemctl start wsb-data-feed.timer
 
 echo ""
 echo "=== Setup complete ==="

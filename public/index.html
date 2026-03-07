@@ -1555,10 +1555,24 @@
               placeholder="Your secret key"
             />
           </div>
-          <div class="tb-checkbox-row">
-            <input type="checkbox" id="tbPaper" checked />
-            <label for="tbPaper">Paper Trading (recommended for testing)</label>
+          <div class="tb-form-group">
+            <label>Account Type</label>
+            <div class="tb-mode-toggle" id="tbAccountTypeToggle">
+              <button class="active" data-accttype="paper">Paper</button>
+              <button data-accttype="live">Live / Market</button>
+            </div>
+            <div
+              style="
+                color: var(--text-muted);
+                font-size: 0.75rem;
+                margin-top: 6px;
+              "
+              id="tbAcctTypeDesc"
+            >
+              Paper trading account. No real money at risk.
+            </div>
           </div>
+          <input type="hidden" id="tbPaper" value="true" />
           <div class="tb-btn-row">
             <button
               class="tb-btn tb-btn-primary"
@@ -2614,7 +2628,8 @@
         const apiSecretKey = document
           .getElementById("tbApiSecret")
           .value.trim();
-        const paperTrading = document.getElementById("tbPaper").checked;
+        const paperTrading =
+          document.getElementById("tbPaper").value === "true";
         const msgEl = document.getElementById("tbSetupMsg");
         const btn = document.getElementById("tbSaveBtn");
 
@@ -2848,6 +2863,28 @@
           console.warn("Failed to fetch bot statuses:", err);
         }
       }
+
+      // Account type toggle (paper vs live)
+      const acctDescs = {
+        paper: "Paper trading account. No real money at risk.",
+        live: "Live market account. Real money. Be careful.",
+      };
+      document
+        .querySelectorAll("#tbAccountTypeToggle button")
+        .forEach((btn) => {
+          btn.addEventListener("click", () => {
+            document
+              .querySelectorAll("#tbAccountTypeToggle button")
+              .forEach((b) => b.classList.remove("active"));
+            btn.classList.add("active");
+            const isPaper = btn.dataset.accttype === "paper";
+            document.getElementById("tbPaper").value = isPaper
+              ? "true"
+              : "false";
+            document.getElementById("tbAcctTypeDesc").textContent =
+              acctDescs[btn.dataset.accttype] || "";
+          });
+        });
 
       // Risk level toggle
       const riskDescs = {

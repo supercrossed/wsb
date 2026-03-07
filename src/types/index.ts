@@ -84,20 +84,57 @@ export interface CramerIndex {
   recentPicks: CramerPick[];
 }
 
-// Future trade bot types
-export interface TradeAccount {
-  name: "wsb" | "inverse";
-  apiKey: string;
-  apiSecret: string;
+// Trade bot types
+export type TradeBotMode = "wsb" | "inverse";
+
+export interface AlpacaCredentials {
+  apiKeyId: string;
+  apiSecretKey: string;
+  paperTrading: boolean;
 }
 
-export interface DailyTrade {
-  date: string;
-  account: "wsb" | "inverse";
-  direction: "call" | "put";
-  entryPrice: number;
-  exitPrice: number | null;
-  profitLoss: number | null;
-  profitLossPercent: number | null;
-  status: "open" | "closed" | "stopped";
+export interface TradeBotConfig {
+  id: number;
+  mode: TradeBotMode;
+  apiKeyId: string;
+  apiSecretKey: string;
+  paperTrading: boolean;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TradeBotStatus {
+  running: boolean;
+  mode: TradeBotMode;
+  paperTrading: boolean;
+  accountEquity: number | null;
+  accountCash: number | null;
+  lastTradeAt: string | null;
+  positions: AlpacaPosition[];
+}
+
+export interface AlpacaPosition {
+  symbol: string;
+  qty: string;
+  side: string;
+  marketValue: string;
+  unrealizedPl: string;
+  unrealizedPlpc: string;
+  currentPrice: string;
+  avgEntryPrice: string;
+}
+
+export interface TradeLog {
+  id: number;
+  timestamp: string;
+  mode: TradeBotMode;
+  action: string;
+  symbol: string;
+  side: "buy" | "sell";
+  qty: number;
+  price: number | null;
+  orderId: string | null;
+  status: "submitted" | "filled" | "cancelled" | "error";
+  message: string;
 }

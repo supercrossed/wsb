@@ -686,6 +686,357 @@
     .spy-streak-dot.win { background: var(--green-dim); color: var(--green); }
     .spy-streak-dot.loss { background: var(--red-dim); color: var(--red); }
     .spy-streak-dot.na { background: rgba(110,122,136,0.1); color: var(--text-muted); }
+
+    /* Trade Bot page styles */
+    .tb-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    @media (max-width: 768px) {
+      .tb-grid { grid-template-columns: 1fr; }
+    }
+    .tb-setup-card {
+      padding: 28px;
+    }
+    .tb-form-group {
+      margin-bottom: 16px;
+    }
+    .tb-form-group label {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .tb-input {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--surface-raised);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .tb-input:focus {
+      border-color: var(--blue);
+    }
+    .tb-input::placeholder {
+      color: var(--text-muted);
+      opacity: 0.5;
+    }
+    .tb-select {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--surface-raised);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%236e7a88' d='M1.41 0L6 4.58 10.59 0 12 1.41l-6 6-6-6z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+    }
+    .tb-select:focus {
+      border-color: var(--blue);
+    }
+    .tb-checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .tb-checkbox-row input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--blue);
+      cursor: pointer;
+    }
+    .tb-checkbox-row label {
+      margin: 0;
+      font-size: 0.85rem;
+      color: var(--text);
+      cursor: pointer;
+    }
+    .tb-btn {
+      padding: 10px 24px;
+      border: none;
+      border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .tb-btn-primary {
+      background: var(--blue);
+      color: #fff;
+    }
+    .tb-btn-primary:hover {
+      background: #6db3ff;
+    }
+    .tb-btn-primary:disabled {
+      background: var(--surface-raised);
+      color: var(--text-muted);
+      cursor: not-allowed;
+    }
+    .tb-btn-success {
+      background: var(--green);
+      color: #06080d;
+    }
+    .tb-btn-success:hover {
+      background: #33ff9f;
+    }
+    .tb-btn-danger {
+      background: var(--red);
+      color: #fff;
+    }
+    .tb-btn-danger:hover {
+      background: #ff5d79;
+    }
+    .tb-btn-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 8px;
+    }
+    .tb-msg {
+      margin-top: 12px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-family: 'JetBrains Mono', monospace;
+      display: none;
+    }
+    .tb-msg.success {
+      display: block;
+      background: var(--green-dim);
+      color: var(--green);
+      border: 1px solid rgba(0,255,135,0.2);
+    }
+    .tb-msg.error {
+      display: block;
+      background: var(--red-dim);
+      color: var(--red);
+      border: 1px solid rgba(255,59,92,0.2);
+    }
+    .tb-status-card {
+      padding: 28px;
+    }
+    .tb-status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .tb-bot-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+    .tb-bot-badge.running {
+      background: var(--green-dim);
+      color: var(--green);
+    }
+    .tb-bot-badge.stopped {
+      background: rgba(110,122,136,0.1);
+      color: var(--text-muted);
+    }
+    .tb-bot-badge .tb-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .tb-bot-badge.running .tb-dot {
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    .tb-bot-badge.stopped .tb-dot {
+      background: var(--text-muted);
+    }
+    .tb-account-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .tb-account-stat {
+      padding: 14px;
+      background: var(--surface-raised);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+    .tb-account-stat-label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .tb-account-stat-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .tb-positions {
+      margin-top: 16px;
+    }
+    .tb-positions h3 {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+    .tb-pos-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(30,39,50,0.4);
+      font-size: 0.82rem;
+    }
+    .tb-pos-symbol {
+      color: var(--blue);
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      min-width: 60px;
+    }
+    .tb-pos-qty { color: var(--text-muted); min-width: 50px; }
+    .tb-pos-value { color: var(--text); flex: 1; }
+    .tb-pos-pl { font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+    .tb-pos-pl.positive { color: var(--green); }
+    .tb-pos-pl.negative { color: var(--red); }
+    .tb-no-positions {
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      font-style: italic;
+      padding: 12px 0;
+    }
+
+    /* Trade log table */
+    .tb-log-card {
+      margin-top: 20px;
+      padding: 28px;
+    }
+    .tb-log-table {
+      width: 100%;
+      font-size: 0.78rem;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .tb-log-table th {
+      text-align: left;
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      padding: 8px 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .tb-log-table td {
+      padding: 6px;
+      border-bottom: 1px solid rgba(30,39,50,0.3);
+      color: var(--text);
+    }
+    .tb-log-empty {
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      font-style: italic;
+      padding: 20px 0;
+      text-align: center;
+    }
+    .tb-mode-toggle {
+      display: flex;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+    .tb-mode-toggle button {
+      flex: 1;
+      padding: 10px 20px;
+      background: var(--surface-raised);
+      color: var(--text-muted);
+      border: none;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tb-mode-toggle button.active {
+      background: var(--blue-dim);
+      color: var(--blue);
+    }
+    .tb-mode-toggle button:hover:not(.active) {
+      color: var(--text);
+    }
+
+    /* Existing configs list */
+    .tb-configs {
+      margin-top: 20px;
+    }
+    .tb-config-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      background: var(--surface-raised);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .tb-config-mode {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .tb-config-mode.wsb { color: var(--green); }
+    .tb-config-mode.inverse { color: var(--red); }
+    .tb-config-key {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+    .tb-config-paper {
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .tb-config-paper.paper {
+      background: var(--yellow-dim);
+      color: var(--yellow);
+    }
+    .tb-config-paper.live {
+      background: var(--red-dim);
+      color: var(--red);
+    }
   </style>
 </head>
 <body>
@@ -699,6 +1050,7 @@
   <nav>
     <a href="#" class="active" data-page="dashboard">Dashboard</a>
     <a href="#" data-page="history">Historical</a>
+    <a href="#" data-page="tradebot">Trade Bot</a>
   </nav>
 
   <!-- Dashboard Page -->
@@ -832,6 +1184,90 @@
     </div>
   </div>
 
+  <!-- Trade Bot Page -->
+  <div class="page" id="page-tradebot">
+    <div class="container">
+      <!-- Mode toggle -->
+      <div class="tb-mode-toggle">
+        <button class="active" data-tbmode="inverse">Inverse WSB</button>
+        <button data-tbmode="wsb">Follow WSB</button>
+      </div>
+
+      <div class="tb-grid">
+        <!-- Setup Card -->
+        <div class="card tb-setup-card">
+          <h2>Account Setup</h2>
+          <div class="tb-configs" id="tbConfigs"></div>
+          <div class="tb-form-group" style="margin-top:20px;">
+            <label for="tbMode">Strategy Mode</label>
+            <select class="tb-select" id="tbMode">
+              <option value="inverse">Inverse WSB (bet against the herd)</option>
+              <option value="wsb">Follow WSB (ride the wave)</option>
+            </select>
+          </div>
+          <div class="tb-form-group">
+            <label for="tbApiKey">Alpaca API Key ID</label>
+            <input type="text" class="tb-input" id="tbApiKey" placeholder="PK...">
+          </div>
+          <div class="tb-form-group">
+            <label for="tbApiSecret">Alpaca API Secret Key</label>
+            <input type="password" class="tb-input" id="tbApiSecret" placeholder="Your secret key">
+          </div>
+          <div class="tb-checkbox-row">
+            <input type="checkbox" id="tbPaper" checked>
+            <label for="tbPaper">Paper Trading (recommended for testing)</label>
+          </div>
+          <div class="tb-btn-row">
+            <button class="tb-btn tb-btn-primary" id="tbSaveBtn" onclick="saveTradeBotConfig()">Save & Verify</button>
+          </div>
+          <div class="tb-msg" id="tbSetupMsg"></div>
+        </div>
+
+        <!-- Status Card -->
+        <div class="card tb-status-card">
+          <h2>Bot Status</h2>
+          <div class="tb-status-row">
+            <div class="tb-bot-badge stopped" id="tbBotBadge">
+              <span class="tb-dot"></span>
+              <span id="tbBotBadgeText">STOPPED</span>
+            </div>
+            <div class="tb-btn-row">
+              <button class="tb-btn tb-btn-success" id="tbStartBtn" onclick="startTradeBot()">Start</button>
+              <button class="tb-btn tb-btn-danger" id="tbStopBtn" onclick="stopTradeBot()" style="display:none;">Stop</button>
+            </div>
+          </div>
+
+          <div class="tb-account-stats" id="tbAccountStats" style="display:none;">
+            <div class="tb-account-stat">
+              <div class="tb-account-stat-label">Equity</div>
+              <div class="tb-account-stat-value" id="tbEquity">--</div>
+            </div>
+            <div class="tb-account-stat">
+              <div class="tb-account-stat-label">Cash</div>
+              <div class="tb-account-stat-value" id="tbCash">--</div>
+            </div>
+          </div>
+
+          <div class="tb-positions" id="tbPositions">
+            <h3>Open Positions</h3>
+            <div class="tb-no-positions" id="tbNoPositions">No open positions</div>
+            <div id="tbPositionsList"></div>
+          </div>
+
+          <div class="tb-msg" id="tbStatusMsg"></div>
+        </div>
+      </div>
+
+      <!-- Trade Log -->
+      <div class="card tb-log-card">
+        <h2>Trade Log</h2>
+        <div id="tbLogContent">
+          <div class="tb-log-empty">No trades yet. The bot will log trades here once started.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     let pieChart = null;
     let historyChartInstance = null;
@@ -847,6 +1283,11 @@
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         document.getElementById('page-' + page).classList.add('active');
         if (page === 'history') loadHistory();
+        if (page === 'tradebot') {
+          fetchTradeBotConfigs();
+          fetchTradeBotStatus();
+          fetchTradeBotLogs();
+        }
       });
     });
 
@@ -1556,6 +1997,236 @@
         }
       } catch (err) {
         console.warn('Inverse scorecard fetch failed:', err);
+      }
+    }
+
+    // --- Trade Bot ---
+    let tbActiveMode = 'inverse';
+    let tbPollingInterval = null;
+
+    // Mode toggle buttons
+    document.querySelectorAll('.tb-mode-toggle button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tb-mode-toggle button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        tbActiveMode = btn.dataset.tbmode;
+        document.getElementById('tbMode').value = tbActiveMode;
+        fetchTradeBotStatus();
+        fetchTradeBotLogs();
+      });
+    });
+
+    async function fetchTradeBotConfigs() {
+      try {
+        const res = await fetch('/api/tradebot/configs');
+        const data = await res.json();
+        const container = document.getElementById('tbConfigs');
+        container.innerHTML = '';
+        if (!data.configs || data.configs.length === 0) {
+          container.innerHTML = '<div style="color:var(--text-muted);font-size:0.82rem;font-style:italic;">No accounts configured yet.</div>';
+          return;
+        }
+        for (const cfg of data.configs) {
+          const item = document.createElement('div');
+          item.className = 'tb-config-item';
+          item.innerHTML =
+            '<span class="tb-config-mode ' + cfg.mode + '">' + cfg.mode + '</span>' +
+            '<span class="tb-config-key">' + cfg.apiKeyId + '</span>' +
+            '<span class="tb-config-paper ' + (cfg.paperTrading ? 'paper' : 'live') + '">' +
+              (cfg.paperTrading ? 'Paper' : 'Live') + '</span>';
+          container.appendChild(item);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch tradebot configs:', err);
+      }
+    }
+
+    async function saveTradeBotConfig() {
+      const mode = document.getElementById('tbMode').value;
+      const apiKeyId = document.getElementById('tbApiKey').value.trim();
+      const apiSecretKey = document.getElementById('tbApiSecret').value.trim();
+      const paperTrading = document.getElementById('tbPaper').checked;
+      const msgEl = document.getElementById('tbSetupMsg');
+      const btn = document.getElementById('tbSaveBtn');
+
+      if (!apiKeyId || !apiSecretKey) {
+        msgEl.textContent = 'Please enter both API Key ID and Secret Key.';
+        msgEl.className = 'tb-msg error';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Verifying...';
+      msgEl.className = 'tb-msg';
+      msgEl.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/tradebot/setup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode, apiKeyId, apiSecretKey, paperTrading }),
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          msgEl.textContent = 'Account verified! Equity: $' + parseFloat(data.account.equity).toLocaleString(undefined, {minimumFractionDigits: 2});
+          msgEl.className = 'tb-msg success';
+          document.getElementById('tbApiKey').value = '';
+          document.getElementById('tbApiSecret').value = '';
+          fetchTradeBotConfigs();
+          fetchTradeBotStatus();
+        } else {
+          msgEl.textContent = data.error || 'Setup failed.';
+          msgEl.className = 'tb-msg error';
+        }
+      } catch (err) {
+        msgEl.textContent = 'Network error: ' + err.message;
+        msgEl.className = 'tb-msg error';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save & Verify';
+      }
+    }
+
+    async function startTradeBot() {
+      const msgEl = document.getElementById('tbStatusMsg');
+      try {
+        const res = await fetch('/api/tradebot/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: tbActiveMode }),
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          msgEl.textContent = tbActiveMode.toUpperCase() + ' bot started.';
+          msgEl.className = 'tb-msg success';
+          fetchTradeBotStatus();
+        } else {
+          msgEl.textContent = data.error || 'Failed to start bot.';
+          msgEl.className = 'tb-msg error';
+        }
+      } catch (err) {
+        msgEl.textContent = 'Network error: ' + err.message;
+        msgEl.className = 'tb-msg error';
+      }
+    }
+
+    async function stopTradeBot() {
+      const msgEl = document.getElementById('tbStatusMsg');
+      try {
+        const res = await fetch('/api/tradebot/stop', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: tbActiveMode }),
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          msgEl.textContent = tbActiveMode.toUpperCase() + ' bot stopped.';
+          msgEl.className = 'tb-msg success';
+          fetchTradeBotStatus();
+        } else {
+          msgEl.textContent = data.error || 'Failed to stop bot.';
+          msgEl.className = 'tb-msg error';
+        }
+      } catch (err) {
+        msgEl.textContent = 'Network error: ' + err.message;
+        msgEl.className = 'tb-msg error';
+      }
+    }
+
+    async function fetchTradeBotStatus() {
+      try {
+        const res = await fetch('/api/tradebot/status?mode=' + tbActiveMode);
+        const data = await res.json();
+
+        const badge = document.getElementById('tbBotBadge');
+        const badgeText = document.getElementById('tbBotBadgeText');
+        const startBtn = document.getElementById('tbStartBtn');
+        const stopBtn = document.getElementById('tbStopBtn');
+
+        if (data.running) {
+          badge.className = 'tb-bot-badge running';
+          badgeText.textContent = 'RUNNING';
+          startBtn.style.display = 'none';
+          stopBtn.style.display = 'block';
+        } else {
+          badge.className = 'tb-bot-badge stopped';
+          badgeText.textContent = 'STOPPED';
+          startBtn.style.display = 'block';
+          stopBtn.style.display = 'none';
+        }
+
+        const statsEl = document.getElementById('tbAccountStats');
+        if (data.accountEquity !== null) {
+          statsEl.style.display = 'grid';
+          document.getElementById('tbEquity').textContent = '$' + data.accountEquity.toLocaleString(undefined, {minimumFractionDigits: 2});
+          document.getElementById('tbCash').textContent = '$' + data.accountCash.toLocaleString(undefined, {minimumFractionDigits: 2});
+        } else {
+          statsEl.style.display = 'none';
+        }
+
+        // Positions
+        const posListEl = document.getElementById('tbPositionsList');
+        const noPosEl = document.getElementById('tbNoPositions');
+        posListEl.innerHTML = '';
+
+        if (data.positions && data.positions.length > 0) {
+          noPosEl.style.display = 'none';
+          for (const pos of data.positions) {
+            const row = document.createElement('div');
+            row.className = 'tb-pos-row';
+            const pl = parseFloat(pos.unrealizedPl);
+            const plClass = pl >= 0 ? 'positive' : 'negative';
+            const plSign = pl >= 0 ? '+' : '';
+            row.innerHTML =
+              '<span class="tb-pos-symbol">' + pos.symbol + '</span>' +
+              '<span class="tb-pos-qty">' + pos.qty + ' shares</span>' +
+              '<span class="tb-pos-value">$' + parseFloat(pos.marketValue).toLocaleString(undefined, {minimumFractionDigits: 2}) + '</span>' +
+              '<span class="tb-pos-pl ' + plClass + '">' + plSign + '$' + pl.toFixed(2) + ' (' + (parseFloat(pos.unrealizedPlpc) * 100).toFixed(2) + '%)</span>';
+            posListEl.appendChild(row);
+          }
+        } else {
+          noPosEl.style.display = 'block';
+        }
+      } catch (err) {
+        console.warn('Trade bot status fetch failed:', err);
+      }
+    }
+
+    async function fetchTradeBotLogs() {
+      try {
+        const res = await fetch('/api/tradebot/logs?mode=' + tbActiveMode + '&limit=20');
+        const data = await res.json();
+        const container = document.getElementById('tbLogContent');
+
+        if (!data.logs || data.logs.length === 0) {
+          container.innerHTML = '<div class="tb-log-empty">No trades yet. The bot will log trades here once started.</div>';
+          return;
+        }
+
+        let html = '<table class="tb-log-table"><thead><tr>' +
+          '<th>Time</th><th>Action</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Price</th><th>Status</th>' +
+          '</tr></thead><tbody>';
+
+        for (const log of data.logs) {
+          const sideColor = log.side === 'buy' ? 'var(--green)' : 'var(--red)';
+          html += '<tr>' +
+            '<td>' + log.timestamp + '</td>' +
+            '<td>' + log.action + '</td>' +
+            '<td style="color:var(--blue);font-weight:700;">' + log.symbol + '</td>' +
+            '<td style="color:' + sideColor + ';font-weight:700;">' + log.side.toUpperCase() + '</td>' +
+            '<td>' + log.qty + '</td>' +
+            '<td>' + (log.price ? '$' + log.price.toFixed(2) : '--') + '</td>' +
+            '<td>' + log.status + '</td>' +
+            '</tr>';
+        }
+
+        html += '</tbody></table>';
+        container.innerHTML = html;
+      } catch (err) {
+        console.warn('Trade bot logs fetch failed:', err);
       }
     }
 

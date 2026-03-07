@@ -4,6 +4,7 @@ import { config } from "./config";
 import { initDatabase } from "./services/database";
 import { startScheduler } from "./services/scheduler";
 import { startServer } from "./server";
+import { restoreBotState } from "./services/tradebot";
 import { logger } from "./lib/logger";
 
 function main(): void {
@@ -17,6 +18,9 @@ function main(): void {
 
   // Start polling scheduler
   startScheduler();
+
+  // Restore trade bot state from last run
+  restoreBotState();
 
   logger.info("All systems initialized");
 }

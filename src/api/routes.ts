@@ -13,12 +13,26 @@ import {
   getSpyChangeByDate,
   getDb,
   saveHistoricalEntry,
+  saveTradeBotConfig,
+  getAllTradeBotConfigs,
+  getRecentTradeLogs,
 } from "../services/database";
 import { fetchSpyToday, fetchSpyRealtime } from "../services/spy";
 import { getActiveThreadType } from "../services/reddit";
 import { computeCramerIndex } from "../services/cramer";
 import { getInverseRecommendation } from "../services/sentiment";
-import { pollAndAnalyze, backfillSpyPrices, getTradingDateString } from "../services/scheduler";
+import {
+  pollAndAnalyze,
+  backfillSpyPrices,
+  getTradingDateString,
+} from "../services/scheduler";
+import {
+  startBot,
+  stopBot,
+  getBotStatus,
+  validateCredentials,
+} from "../services/tradebot";
+import type { TradeBotMode } from "../types";
 import { logger } from "../lib/logger";
 import { config } from "../config";
 
@@ -131,7 +145,11 @@ router.post("/api/seed-historical", async (req: Request, res: Response) => {
       inverseRecommendation: string;
     };
     if (!date || !wsbSentiment || !inverseRecommendation) {
-      res.status(400).json({ error: "Missing date, wsbSentiment, or inverseRecommendation" });
+      res
+        .status(400)
+        .json({
+          error: "Missing date, wsbSentiment, or inverseRecommendation",
+        });
       return;
     }
     saveHistoricalEntry(date, wsbSentiment, inverseRecommendation);
@@ -196,9 +214,12 @@ router.get("/api/live-counts", (_req: Request, res: Response) => {
     threadType,
     ...counts,
     total,
-    bullishPercent: total > 0 ? Math.round((counts.bullish / total) * 10000) / 100 : 0,
-    bearishPercent: total > 0 ? Math.round((counts.bearish / total) * 10000) / 100 : 0,
-    neutralPercent: total > 0 ? Math.round((counts.neutral / total) * 10000) / 100 : 0,
+    bullishPercent:
+      total > 0 ? Math.round((counts.bullish / total) * 10000) / 100 : 0,
+    bearishPercent:
+      total > 0 ? Math.round((counts.bearish / total) * 10000) / 100 : 0,
+    neutralPercent:
+      total > 0 ? Math.round((counts.neutral / total) * 10000) / 100 : 0,
   });
 });
 
@@ -278,7 +299,8 @@ router.get("/api/cramer", (_req: Request, res: Response) => {
       const cramerRight =
         (pick.direction === "bullish" && spyUp) ||
         (pick.direction === "bearish" && !spyUp);
-      verdict = pick.direction === "neutral" ? null : (cramerRight ? "RIGHT" : "WRONG");
+      verdict =
+        pick.direction === "neutral" ? null : cramerRight ? "RIGHT" : "WRONG";
     }
     return { ...pick, spyChange: spy ?? null, verdict };
   });
@@ -403,6 +425,143 @@ router.get("/api/system", (_req: Request, res: Response) => {
     cpuCount: os.cpus().length,
     cpuModel: os.cpus()[0]?.model ?? "unknown",
   });
+});
+
+// --- Trade Bot routes ---
+
+/**
+ * GET /api/tradebot/configs
+ * Returns all configured trade bot accounts (API keys masked).
+ */
+router.get("/api/tradebot/configs", (_req: Request, res: Response) => {
+  const configs = getAllTradeBotConfigs();
+  const masked = configs.map((cfg) => ({
+    ...cfg,
+    apiKeyId: cfg.apiKeyId ? `${cfg.apiKeyId.slice(0, 4)}****` : "",
+    apiSecretKey: cfg.apiSecretKey ? "****" : "",
+  }));
+  res.json({ configs: masked });
+});
+
+/**
+ * POST /api/tradebot/setup
+ * Saves Alpaca credentials for a bot mode. Validates them first.
+ * Body: { mode: "wsb"|"inverse", apiKeyId, apiSecretKey, paperTrading }
+ */
+router.post("/api/tradebot/setup", async (req: Request, res: Response) => {
+  try {
+    const { mode, apiKeyId, apiSecretKey, paperTrading } = req.body as {
+      mode: TradeBotMode;
+      apiKeyId: string;
+      apiSecretKey: string;
+      paperTrading: boolean;
+    };
+
+    if (!mode || !apiKeyId || !apiSecretKey) {
+      res
+        .status(400)
+        .json({ error: "Missing mode, apiKeyId, or apiSecretKey" });
+      return;
+    }
+
+    if (mode !== "wsb" && mode !== "inverse") {
+      res.status(400).json({ error: "Mode must be 'wsb' or 'inverse'" });
+      return;
+    }
+
+    // Validate credentials against Alpaca
+    const validation = await validateCredentials(
+      apiKeyId,
+      apiSecretKey,
+      paperTrading ?? true,
+    );
+    if (!validation.valid) {
+      res
+        .status(400)
+        .json({ error: `Invalid credentials: ${validation.error}` });
+      return;
+    }
+
+    saveTradeBotConfig(mode, apiKeyId, apiSecretKey, paperTrading ?? true);
+    res.json({ success: true, account: validation.account });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error("Trade bot setup failed", { error: message });
+    res.status(500).json({ error: message });
+  }
+});
+
+/**
+ * POST /api/tradebot/start
+ * Starts the trade bot for a given mode.
+ * Body: { mode: "wsb"|"inverse" }
+ */
+router.post("/api/tradebot/start", (_req: Request, res: Response) => {
+  const { mode } = _req.body as { mode: TradeBotMode };
+  if (mode !== "wsb" && mode !== "inverse") {
+    res.status(400).json({ error: "Mode must be 'wsb' or 'inverse'" });
+    return;
+  }
+  const result = startBot(mode);
+  if (!result.success) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  res.json({ success: true });
+});
+
+/**
+ * POST /api/tradebot/stop
+ * Stops the trade bot for a given mode.
+ * Body: { mode: "wsb"|"inverse" }
+ */
+router.post("/api/tradebot/stop", (_req: Request, res: Response) => {
+  const { mode } = _req.body as { mode: TradeBotMode };
+  if (mode !== "wsb" && mode !== "inverse") {
+    res.status(400).json({ error: "Mode must be 'wsb' or 'inverse'" });
+    return;
+  }
+  const result = stopBot(mode);
+  if (!result.success) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  res.json({ success: true });
+});
+
+/**
+ * GET /api/tradebot/status?mode=wsb|inverse
+ * Returns live status of a trade bot including Alpaca account data.
+ */
+router.get("/api/tradebot/status", async (req: Request, res: Response) => {
+  try {
+    const mode = req.query.mode as TradeBotMode;
+    if (mode !== "wsb" && mode !== "inverse") {
+      res
+        .status(400)
+        .json({ error: "Mode query param must be 'wsb' or 'inverse'" });
+      return;
+    }
+    const status = await getBotStatus(mode);
+    res.json(status);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+/**
+ * GET /api/tradebot/logs?mode=wsb|inverse&limit=50
+ * Returns recent trade logs.
+ */
+router.get("/api/tradebot/logs", (req: Request, res: Response) => {
+  const mode = (req.query.mode as TradeBotMode) || null;
+  const limit = Math.min(
+    parseInt((req.query.limit as string) ?? "50", 10),
+    200,
+  );
+  const logs = getRecentTradeLogs(mode, limit);
+  res.json({ logs });
 });
 
 export { router };

@@ -3,7 +3,17 @@ import path from "path";
 import fs from "fs";
 
 import { logger } from "../lib/logger";
-import type { CommentSentiment, CramerPick, DailySentiment, HistoricalEntry, ThreadType, TopPost } from "../types";
+import type {
+  CommentSentiment,
+  CramerPick,
+  DailySentiment,
+  HistoricalEntry,
+  ThreadType,
+  TopPost,
+  TradeBotConfig,
+  TradeBotMode,
+  TradeLog,
+} from "../types";
 
 let db: Database.Database;
 
@@ -88,6 +98,35 @@ export function initDatabase(dbPath: string): Database.Database {
     );
 
     CREATE INDEX IF NOT EXISTS idx_cramer_picks_date ON cramer_picks(date);
+
+    CREATE TABLE IF NOT EXISTS tradebot_config (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      mode TEXT NOT NULL CHECK(mode IN ('wsb', 'inverse')),
+      api_key_id TEXT NOT NULL,
+      api_secret_key TEXT NOT NULL,
+      paper_trading INTEGER NOT NULL DEFAULT 1,
+      enabled INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(mode)
+    );
+
+    CREATE TABLE IF NOT EXISTS trade_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+      mode TEXT NOT NULL,
+      action TEXT NOT NULL,
+      symbol TEXT NOT NULL,
+      side TEXT NOT NULL,
+      qty REAL NOT NULL,
+      price REAL,
+      order_id TEXT,
+      status TEXT NOT NULL DEFAULT 'submitted',
+      message TEXT NOT NULL DEFAULT ''
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_trade_log_timestamp ON trade_log(timestamp);
+    CREATE INDEX IF NOT EXISTS idx_trade_log_mode ON trade_log(mode);
   `);
 
   logger.info("Database initialized", { path: dbPath });
@@ -131,7 +170,17 @@ export function saveFullComment(
     INSERT OR IGNORE INTO comments (id, body, author, created_utc, thread_id, thread_type, sentiment, confidence, tickers)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  const result = stmt.run(id, body, author, createdUtc, threadId, threadType, sentiment, confidence, JSON.stringify(tickers));
+  const result = stmt.run(
+    id,
+    body,
+    author,
+    createdUtc,
+    threadId,
+    threadType,
+    sentiment,
+    confidence,
+    JSON.stringify(tickers),
+  );
   return result.changes > 0;
 }
 
@@ -210,7 +259,8 @@ export function getHistoricalComparison(days: number): HistoricalEntry[] {
     spyOpen: row.spy_open as number | null,
     spyClose: row.spy_close as number | null,
     spyChange: row.spy_change as number | null,
-    inverseCorrect: row.inverse_correct === null ? null : Boolean(row.inverse_correct),
+    inverseCorrect:
+      row.inverse_correct === null ? null : Boolean(row.inverse_correct),
   }));
 }
 
@@ -230,18 +280,28 @@ export function getRecentOutcomes(limit: number = 5): HistoricalEntry[] {
     spyOpen: row.spy_open as number | null,
     spyClose: row.spy_close as number | null,
     spyChange: row.spy_change as number | null,
-    inverseCorrect: row.inverse_correct === null ? null : Boolean(row.inverse_correct),
+    inverseCorrect:
+      row.inverse_correct === null ? null : Boolean(row.inverse_correct),
   }));
 }
 
-export function getCommentCountSince(sinceUtc: number, threadType?: ThreadType): { bullish: number; bearish: number; neutral: number } {
+export function getCommentCountSince(
+  sinceUtc: number,
+  threadType?: ThreadType,
+): { bullish: number; bearish: number; neutral: number } {
   const query = threadType
     ? "SELECT sentiment, COUNT(*) as count FROM comments WHERE created_utc >= ? AND thread_type = ? GROUP BY sentiment"
     : "SELECT sentiment, COUNT(*) as count FROM comments WHERE created_utc >= ? GROUP BY sentiment";
 
   const rows = threadType
-    ? (getDb().prepare(query).all(sinceUtc, threadType) as { sentiment: string; count: number }[])
-    : (getDb().prepare(query).all(sinceUtc) as { sentiment: string; count: number }[]);
+    ? (getDb().prepare(query).all(sinceUtc, threadType) as {
+        sentiment: string;
+        count: number;
+      }[])
+    : (getDb().prepare(query).all(sinceUtc) as {
+        sentiment: string;
+        count: number;
+      }[]);
 
   const result = { bullish: 0, bearish: 0, neutral: 0 };
   for (const row of rows) {
@@ -301,7 +361,13 @@ export function saveHistoricalEntry(
     VALUES (?, ?, ?)
     ON CONFLICT(date) DO UPDATE SET wsb_sentiment = ?, inverse_recommendation = ?
   `);
-  stmt.run(date, wsbSentiment, inverseRecommendation, wsbSentiment, inverseRecommendation);
+  stmt.run(
+    date,
+    wsbSentiment,
+    inverseRecommendation,
+    wsbSentiment,
+    inverseRecommendation,
+  );
 }
 
 export function updateSpyPrices(
@@ -343,13 +409,23 @@ export function bulkUpsertSpyPrices(
 
   const transaction = getDb().transaction(() => {
     for (const p of prices) {
-      insertStmt.run(p.date, p.open, p.close, p.change, p.open, p.close, p.change);
+      insertStmt.run(
+        p.date,
+        p.open,
+        p.close,
+        p.change,
+        p.open,
+        p.close,
+        p.change,
+      );
     }
   });
   transaction();
 
   // Recompute inverse_correct for all rows that have both a real recommendation and SPY data
-  getDb().prepare(`
+  getDb()
+    .prepare(
+      `
     UPDATE historical SET inverse_correct = CASE
       WHEN inverse_recommendation = 'CALLS' AND spy_change > 0 THEN 1
       WHEN inverse_recommendation = 'PUTS' AND spy_change < 0 THEN 1
@@ -357,16 +433,22 @@ export function bulkUpsertSpyPrices(
       ELSE NULL
     END
     WHERE spy_change IS NOT NULL AND inverse_recommendation != 'HOLD' AND wsb_sentiment != 'unknown'
-  `).run();
+  `,
+    )
+    .run();
 }
 
 export function purgeOldData(): void {
   // Comments: only keep today and yesterday (for overnight thread analysis)
   const twoDaysAgo = Math.floor(Date.now() / 1000) - 2 * 86400;
-  const commentResult = getDb().prepare("DELETE FROM comments WHERE created_utc < ?").run(twoDaysAgo);
+  const commentResult = getDb()
+    .prepare("DELETE FROM comments WHERE created_utc < ?")
+    .run(twoDaysAgo);
 
   // top_posts: keep 2 days
-  getDb().prepare("DELETE FROM top_posts WHERE date < date('now', '-2 days')").run();
+  getDb()
+    .prepare("DELETE FROM top_posts WHERE date < date('now', '-2 days')")
+    .run();
 
   // daily_sentiment: keep 90 days for the dashboard history chart
   getDb()
@@ -382,7 +464,9 @@ export function purgeOldData(): void {
   }
 
   // cramer_picks: keep 30 days
-  getDb().prepare("DELETE FROM cramer_picks WHERE date < date('now', '-30 days')").run();
+  getDb()
+    .prepare("DELETE FROM cramer_picks WHERE date < date('now', '-30 days')")
+    .run();
 
   logger.info("Purged old data", { commentsDeleted: commentResult.changes });
 }
@@ -450,7 +534,9 @@ export function getCramerPicks(days: number = 7): CramerPick[] {
 
 export function getSpyChangeByDate(): Record<string, number | null> {
   const rows = getDb()
-    .prepare("SELECT date, spy_change FROM historical WHERE spy_change IS NOT NULL ORDER BY date DESC LIMIT 90")
+    .prepare(
+      "SELECT date, spy_change FROM historical WHERE spy_change IS NOT NULL ORDER BY date DESC LIMIT 90",
+    )
     .all() as { date: string; spy_change: number | null }[];
 
   const map: Record<string, number | null> = {};
@@ -458,4 +544,131 @@ export function getSpyChangeByDate(): Record<string, number | null> {
     map[row.date] = row.spy_change;
   }
   return map;
+}
+
+// --- Trade bot database functions ---
+
+export function getTradeBotConfig(
+  mode: TradeBotMode,
+): TradeBotConfig | undefined {
+  const row = getDb()
+    .prepare("SELECT * FROM tradebot_config WHERE mode = ?")
+    .get(mode) as Record<string, unknown> | undefined;
+
+  if (!row) return undefined;
+
+  return {
+    id: row.id as number,
+    mode: row.mode as TradeBotMode,
+    apiKeyId: row.api_key_id as string,
+    apiSecretKey: row.api_secret_key as string,
+    paperTrading: Boolean(row.paper_trading),
+    enabled: Boolean(row.enabled),
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  };
+}
+
+export function getAllTradeBotConfigs(): TradeBotConfig[] {
+  const rows = getDb()
+    .prepare("SELECT * FROM tradebot_config ORDER BY mode")
+    .all() as Record<string, unknown>[];
+
+  return rows.map((row) => ({
+    id: row.id as number,
+    mode: row.mode as TradeBotMode,
+    apiKeyId: row.api_key_id as string,
+    apiSecretKey: row.api_secret_key as string,
+    paperTrading: Boolean(row.paper_trading),
+    enabled: Boolean(row.enabled),
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  }));
+}
+
+export function saveTradeBotConfig(
+  mode: TradeBotMode,
+  apiKeyId: string,
+  apiSecretKey: string,
+  paperTrading: boolean,
+): void {
+  getDb()
+    .prepare(
+      `
+    INSERT INTO tradebot_config (mode, api_key_id, api_secret_key, paper_trading, updated_at)
+    VALUES (?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(mode) DO UPDATE SET
+      api_key_id = ?,
+      api_secret_key = ?,
+      paper_trading = ?,
+      updated_at = datetime('now')
+  `,
+    )
+    .run(
+      mode,
+      apiKeyId,
+      apiSecretKey,
+      paperTrading ? 1 : 0,
+      apiKeyId,
+      apiSecretKey,
+      paperTrading ? 1 : 0,
+    );
+}
+
+export function setTradeBotEnabled(mode: TradeBotMode, enabled: boolean): void {
+  getDb()
+    .prepare(
+      `
+    UPDATE tradebot_config SET enabled = ?, updated_at = datetime('now') WHERE mode = ?
+  `,
+    )
+    .run(enabled ? 1 : 0, mode);
+}
+
+export function insertTradeLog(log: Omit<TradeLog, "id" | "timestamp">): void {
+  getDb()
+    .prepare(
+      `
+    INSERT INTO trade_log (mode, action, symbol, side, qty, price, order_id, status, message)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `,
+    )
+    .run(
+      log.mode,
+      log.action,
+      log.symbol,
+      log.side,
+      log.qty,
+      log.price,
+      log.orderId,
+      log.status,
+      log.message,
+    );
+}
+
+export function getRecentTradeLogs(
+  mode: TradeBotMode | null,
+  limit: number = 50,
+): TradeLog[] {
+  const query = mode
+    ? "SELECT * FROM trade_log WHERE mode = ? ORDER BY timestamp DESC LIMIT ?"
+    : "SELECT * FROM trade_log ORDER BY timestamp DESC LIMIT ?";
+
+  const rows = mode
+    ? (getDb().prepare(query).all(mode, limit) as Record<string, unknown>[])
+    : (getDb().prepare(query).all(limit) as Record<string, unknown>[]);
+
+  return rows.map((row) => ({
+    id: row.id as number,
+    timestamp: row.timestamp as string,
+    mode: row.mode as TradeBotMode,
+    action: row.action as string,
+    symbol: row.symbol as string,
+    side: row.side as "buy" | "sell",
+    qty: row.qty as number,
+    price: row.price as number | null,
+    orderId: row.order_id as string | null,
+    status: row.status as TradeLog["status"],
+    message: row.message as string,
+  }));
 }

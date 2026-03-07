@@ -1,0 +1,26 @@
+HOW TO CREATE A NEW RELEASE
+===========================
+
+Tell Claude to run the release script with a version number and changelog:
+
+  bash scripts/release.sh 1.1.0 "Added ticker heatmap, fixed weekend thread detection"
+
+This will automatically:
+  - Build the Windows exe
+  - Zip it for distribution
+  - Update CHANGELOG.md
+  - Bump version in package.json
+  - Commit, tag, and push to GitHub
+  - Create a GitHub release with the zip attached
+
+VERSION FORMAT
+  Major.Minor.Patch (e.g. 1.0.0, 1.1.0, 1.1.1)
+  - Patch (1.0.1): bug fixes
+  - Minor (1.1.0): new features
+  - Major (2.0.0): breaking changes
+
+PREREQUISITES
+  - Node.js installed
+  - npm install has been run
+  - GitHub CLI installed and authenticated (gh auth login)
+  - No uncommitted changes in git

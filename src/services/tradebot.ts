@@ -4,6 +4,7 @@ import {
   getTradeBotConfig,
   getAllTradeBotConfigs,
   setTradeBotEnabled,
+  deleteTradeBotConfig,
 } from "./database";
 import type {
   AlpacaCredentials,
@@ -180,6 +181,32 @@ export async function getBotStatus(
       positions: [],
     };
   }
+}
+
+/**
+ * Deletes a bot config. Stops the bot first if running.
+ */
+export function deleteBot(
+  mode: TradeBotMode,
+  paperTrading: boolean,
+): { success: boolean; error?: string } {
+  const key = makeBotKey(mode, paperTrading);
+  const state = getState(key);
+
+  if (state.running) {
+    state.running = false;
+    setTradeBotEnabled(mode, paperTrading, false);
+    logger.info("Trade bot stopped before deletion", { mode, paperTrading });
+  }
+
+  const deleted = deleteTradeBotConfig(mode, paperTrading);
+  if (!deleted) {
+    return { success: false, error: "No bot config found for this mode." };
+  }
+
+  botState.delete(key);
+  logger.info("Trade bot config deleted", { mode, paperTrading });
+  return { success: true };
 }
 
 /**

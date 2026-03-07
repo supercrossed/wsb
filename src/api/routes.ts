@@ -29,6 +29,7 @@ import {
 import {
   startBot,
   stopBot,
+  deleteBot,
   getBotStatus,
   getAllBotStatuses,
   validateCredentials,
@@ -568,6 +569,28 @@ router.get("/api/tradebot/all-status", async (_req: Request, res: Response) => {
     const message = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: message });
   }
+});
+
+/**
+ * POST /api/tradebot/delete
+ * Deletes a bot config. Stops the bot first if running.
+ * Body: { mode: "wsb"|"inverse", paperTrading: boolean }
+ */
+router.post("/api/tradebot/delete", (_req: Request, res: Response) => {
+  const { mode, paperTrading } = _req.body as {
+    mode: TradeBotMode;
+    paperTrading: boolean;
+  };
+  if (mode !== "wsb" && mode !== "inverse") {
+    res.status(400).json({ error: "Mode must be 'wsb' or 'inverse'" });
+    return;
+  }
+  const result = deleteBot(mode, paperTrading ?? true);
+  if (!result.success) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+  res.json({ success: true });
 });
 
 /**

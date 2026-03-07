@@ -2700,6 +2700,38 @@
         }
       }
 
+      function confirmDeleteBot(mode, paperTrading) {
+        const label =
+          mode.toUpperCase() + " " + (paperTrading ? "Paper" : "Live");
+        if (
+          !confirm(
+            "Delete " +
+              label +
+              " bot?\n\nThis will stop the bot and remove its API keys from the server.",
+          )
+        )
+          return;
+        deleteTradeBot(mode, paperTrading);
+      }
+
+      async function deleteTradeBot(mode, paperTrading) {
+        try {
+          const res = await fetch("/api/tradebot/delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode, paperTrading }),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            alert(data.error || "Failed to delete bot.");
+          }
+          fetchTradeBotConfigs();
+          fetchAllBotStatuses();
+        } catch (err) {
+          alert("Network error: " + err.message);
+        }
+      }
+
       async function fetchAllBotStatuses() {
         try {
           const res = await fetch("/api/tradebot/all-status");
@@ -2766,6 +2798,11 @@
               "</div>" +
               '<div class="tb-bot-row-actions">' +
               btnHtml +
+              '<button class="tb-btn tb-btn-danger" style="opacity:0.7;" onclick="confirmDeleteBot(\'' +
+              bot.mode +
+              "'," +
+              bot.paperTrading +
+              ')">Delete</button>' +
               "</div>";
 
             container.appendChild(row);

@@ -1,7 +1,7 @@
 import "dotenv/config";
 
 import { config } from "./config";
-import { initDatabase } from "./services/database";
+import { initDatabase, migrateKeysToEncrypted } from "./services/database";
 import { startScheduler } from "./services/scheduler";
 import { startServer } from "./server";
 import { restoreBotState } from "./services/tradebot";
@@ -18,6 +18,9 @@ function main(): void {
 
   // Start polling scheduler
   startScheduler();
+
+  // Migrate any plaintext API keys to encrypted format
+  migrateKeysToEncrypted();
 
   // Restore trade bot state from last run
   restoreBotState();

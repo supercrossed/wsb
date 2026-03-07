@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 
 import { logger } from "../lib/logger";
+import { encrypt, decrypt, isEncrypted } from "../lib/crypto";
 import type {
   CommentSentiment,
   CramerPick,
@@ -597,8 +598,8 @@ export function getTradeBotConfig(
   return {
     id: row.id as number,
     mode: row.mode as TradeBotMode,
-    apiKeyId: row.api_key_id as string,
-    apiSecretKey: row.api_secret_key as string,
+    apiKeyId: decrypt(row.api_key_id as string),
+    apiSecretKey: decrypt(row.api_secret_key as string),
     paperTrading: Boolean(row.paper_trading),
     enabled: Boolean(row.enabled),
     createdAt: row.created_at as string,
@@ -614,8 +615,8 @@ export function getAllTradeBotConfigs(): TradeBotConfig[] {
   return rows.map((row) => ({
     id: row.id as number,
     mode: row.mode as TradeBotMode,
-    apiKeyId: row.api_key_id as string,
-    apiSecretKey: row.api_secret_key as string,
+    apiKeyId: decrypt(row.api_key_id as string),
+    apiSecretKey: decrypt(row.api_secret_key as string),
     paperTrading: Boolean(row.paper_trading),
     enabled: Boolean(row.enabled),
     createdAt: row.created_at as string,
@@ -629,6 +630,8 @@ export function saveTradeBotConfig(
   apiSecretKey: string,
   paperTrading: boolean,
 ): void {
+  const encKeyId = encrypt(apiKeyId);
+  const encSecret = encrypt(apiSecretKey);
   getDb()
     .prepare(
       `
@@ -640,14 +643,7 @@ export function saveTradeBotConfig(
       updated_at = datetime('now')
   `,
     )
-    .run(
-      mode,
-      apiKeyId,
-      apiSecretKey,
-      paperTrading ? 1 : 0,
-      apiKeyId,
-      apiSecretKey,
-    );
+    .run(mode, encKeyId, encSecret, paperTrading ? 1 : 0, encKeyId, encSecret);
 }
 
 export function setTradeBotEnabled(
@@ -663,6 +659,52 @@ export function setTradeBotEnabled(
   `,
     )
     .run(enabled ? 1 : 0, mode, paperTrading ? 1 : 0);
+}
+
+export function deleteTradeBotConfig(
+  mode: TradeBotMode,
+  paperTrading: boolean,
+): boolean {
+  const result = getDb()
+    .prepare("DELETE FROM tradebot_config WHERE mode = ? AND paper_trading = ?")
+    .run(mode, paperTrading ? 1 : 0);
+  return result.changes > 0;
+}
+
+/**
+ * Migrates any plaintext API keys to encrypted format.
+ * Plaintext keys won't start with "enc:v1:" prefix.
+ */
+export function migrateKeysToEncrypted(): void {
+  const rows = getDb()
+    .prepare("SELECT id, api_key_id, api_secret_key FROM tradebot_config")
+    .all() as { id: number; api_key_id: string; api_secret_key: string }[];
+
+  const updateStmt = getDb().prepare(
+    "UPDATE tradebot_config SET api_key_id = ?, api_secret_key = ? WHERE id = ?",
+  );
+
+  let migrated = 0;
+  for (const row of rows) {
+    const needsKeyMigration = !isEncrypted(row.api_key_id);
+    const needsSecretMigration = !isEncrypted(row.api_secret_key);
+    if (needsKeyMigration || needsSecretMigration) {
+      const encKey = needsKeyMigration
+        ? encrypt(row.api_key_id)
+        : row.api_key_id;
+      const encSecret = needsSecretMigration
+        ? encrypt(row.api_secret_key)
+        : row.api_secret_key;
+      updateStmt.run(encKey, encSecret, row.id);
+      migrated++;
+    }
+  }
+
+  if (migrated > 0) {
+    logger.info("Migrated plaintext API keys to encrypted format", {
+      count: migrated,
+    });
+  }
 }
 
 export function insertTradeLog(log: Omit<TradeLog, "id" | "timestamp">): void {

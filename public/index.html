@@ -2583,10 +2583,10 @@
           if (!marketOpen && outcomes.length > 0) {
             // Show last finalized day's result
             var last = outcomes[0];
-            var hash = "closed:" + last.date + ":" + (last.inverseCorrect === true ? "W" : last.inverseCorrect === false ? "L" : "H");
-            if (hash === lastVerdictHash) { /* skip streak update below */ }
+            var closedHash = "closed:" + last.date + ":" + (last.inverseCorrect === true ? "W" : last.inverseCorrect === false ? "L" : "H");
+            if (closedHash === lastVerdictHash) { /* skip streak update below */ }
             else {
-              lastVerdictHash = hash;
+              lastVerdictHash = closedHash;
               if (last.inverseCorrect === true) {
                 verdictEl.textContent = "Last trading day: inverse was right.";
                 verdictEl.className = "spy-verdict-text inverse-right";

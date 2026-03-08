@@ -138,13 +138,16 @@
       }
 
       nav {
-        background: rgba(14, 18, 24, 0.85);
+        background: rgba(14, 18, 24, 0.95);
         border-bottom: 1px solid var(--border);
         padding: 0 28px;
         display: flex;
         gap: 0;
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
+        position: sticky;
+        top: 53px;
+        z-index: 99;
       }
       nav a {
         color: var(--text-muted);
@@ -1393,6 +1396,65 @@
         padding: 20px 0;
         text-align: center;
       }
+
+      /* About page */
+      .about-section { margin-bottom: 28px; }
+      .about-section:last-child { margin-bottom: 0; }
+      .about-section h3 {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--blue);
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .about-section p, .about-section li {
+        font-size: 0.85rem;
+        line-height: 1.7;
+        color: var(--text);
+        opacity: 0.85;
+      }
+      .about-section ul {
+        list-style: none;
+        padding: 0;
+      }
+      .about-section li {
+        padding: 4px 0;
+        padding-left: 16px;
+        position: relative;
+      }
+      .about-section li::before {
+        content: "\25B8";
+        position: absolute;
+        left: 0;
+        color: var(--blue);
+      }
+      .about-tag {
+        display: inline-block;
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-family: "JetBrains Mono", monospace;
+      }
+      .about-tag-green { background: var(--green-dim); color: var(--green); }
+      .about-tag-red { background: var(--red-dim); color: var(--red); }
+      .about-tag-yellow { background: var(--yellow-dim); color: var(--yellow); }
+      .about-tag-blue { background: var(--blue-dim); color: var(--blue); }
+      .about-divider {
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 20px 0;
+      }
+      .about-code {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.78rem;
+        background: rgba(88, 166, 255, 0.08);
+        color: var(--blue);
+        padding: 1px 6px;
+        border-radius: 3px;
+      }
     </style>
   </head>
   <body>
@@ -1407,6 +1469,7 @@
       <a href="#" class="active" data-page="dashboard">Dashboard</a>
       <a href="#" data-page="history">Historical</a>
       <a href="#" data-page="tradebot">Trade Bot</a>
+      <a href="#" data-page="about">About</a>
     </nav>
 
     <!-- Dashboard Page -->
@@ -1739,6 +1802,117 @@
             <div class="tb-log-empty">
               No trades yet. The bot will log trades here once started.
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- About Page -->
+    <div class="page" id="page-about">
+      <div class="container">
+        <div class="card">
+          <h2>How It Works</h2>
+
+          <div class="about-section">
+            <h3>The Premise</h3>
+            <p>r/wallstreetbets is (almost) always wrong. This tool monitors WSB sentiment in real time and recommends the <strong>inverse</strong> of whatever the crowd is feeling. If WSB is bullish, we say <span class="about-tag about-tag-red">PUTS</span>. If bearish, <span class="about-tag about-tag-green">CALLS</span>. The trade bot can then automatically execute 0DTE SPY options based on that signal.</p>
+          </div>
+
+          <hr class="about-divider" />
+
+          <div class="about-section">
+            <h3>Data Collection</h3>
+            <ul>
+              <li><strong>Reddit polling</strong> &mdash; Every 60 seconds, the app fetches comments from the active WSB discussion thread (Daily, Overnight, or Weekend) plus the top 10 hot posts and their comments, using Reddit's public JSON API (no auth required).</li>
+              <li><strong>Thread schedule</strong> &mdash; Daily Discussion (7 AM&ndash;4 PM EST weekdays), What Are Your Moves Tomorrow (4 PM&ndash;7 AM weekdays), Weekend thread (Fri 4 PM&ndash;Sun 4 PM). On Sunday at 4 PM, both weekend and overnight threads are dual-polled so no comments are missed.</li>
+              <li><strong>Comment storage</strong> &mdash; Comments are stored in a local SQLite database with 2-day retention. Each comment is tagged with its thread type, creation time, upvote count, and analyzed sentiment.</li>
+              <li><strong>SPY prices</strong> &mdash; Daily SPY data is fetched from Yahoo Finance's public chart API. A 90-day backfill runs on startup, and a daily refresh runs at 5 PM EST after market close.</li>
+            </ul>
+          </div>
+
+          <hr class="about-divider" />
+
+          <div class="about-section">
+            <h3>Sentiment Analysis</h3>
+            <p>Each comment is run through a seven-layer sentiment pipeline:</p>
+            <ul>
+              <li><span class="about-tag about-tag-blue">Layer 1</span> <strong>NLP analysis</strong> &mdash; The <span class="about-code">sentiment</span> library scores full sentences for positive/negative tone.</li>
+              <li><span class="about-tag about-tag-blue">Layer 2</span> <strong>WSB phrase patterns</strong> &mdash; 60+ context-aware patterns match WSB-specific language (e.g., "my puts about to rip" = bearish, "bers r fuk" = bullish, "bols r fuk" = bearish).</li>
+              <li><span class="about-tag about-tag-blue">Layer 3</span> <strong>Degen slang</strong> &mdash; Recognizes bers/bols/buls misspellings, thundercock, joever, cooked, and mocking patterns with context-aware scoring.</li>
+              <li><span class="about-tag about-tag-blue">Layer 4</span> <strong>Emoji scoring</strong> &mdash; Rockets and moon emojis score bullish; bear and skull emojis score bearish; diamond hands score bullish.</li>
+              <li><span class="about-tag about-tag-blue">Layer 5</span> <strong>Sarcasm detection</strong> &mdash; 16 patterns (e.g., "what could go wrong", "this is fine", "/s") invert weak signals and discard ambiguous ones.</li>
+              <li><span class="about-tag about-tag-blue">Layer 6</span> <strong>Temporal awareness</strong> &mdash; 10 past-tense patterns (e.g., "expired worthless", "was up 200%") discount the signal by 70%, since past events don't predict the future.</li>
+              <li><span class="about-tag about-tag-blue">Layer 7</span> <strong>Question &amp; relevance gating</strong> &mdash; Questions that aren't directional opinions are dampened. Non-financial NLP-only comments are discarded entirely to avoid noise.</li>
+            </ul>
+          </div>
+
+          <hr class="about-divider" />
+
+          <div class="about-section">
+            <h3>Upvote Weighting</h3>
+            <p>Comments are <strong>upvote-weighted</strong> &mdash; a comment with 50 upvotes counts 50x more than one with 1. This lets the community's own voting amplify signal and suppress noise. The dashboard shows both the raw comment count and the upvote-weighted score.</p>
+          </div>
+
+          <hr class="about-divider" />
+
+          <div class="about-section">
+            <h3>Inverse Recommendation</h3>
+            <p>After sentiment is aggregated, bullish and bearish percentages are compared (neutral excluded). If the spread exceeds 5%, the inverse recommendation fires:</p>
+            <ul>
+              <li>WSB is <strong>bullish</strong> &rarr; Recommend <span class="about-tag about-tag-red">PUTS</span></li>
+              <li>WSB is <strong>bearish</strong> &rarr; Recommend <span class="about-tag about-tag-green">CALLS</span></li>
+              <li>Spread under 5% &rarr; <span class="about-tag about-tag-yellow">HOLD</span></li>
+            </ul>
+            <p style="margin-top:8px">Accuracy is tracked daily by comparing each inverse recommendation against actual SPY movement at close.</p>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 20px">
+          <h2>Trade Bot</h2>
+
+          <div class="about-section">
+            <h3>Overview</h3>
+            <p>The trade bot automatically executes 0DTE (zero days to expiration) SPY options trades on Alpaca based on the sentiment signal. It supports two modes: <span class="about-tag about-tag-blue">Inverse</span> (bet against WSB) and <span class="about-tag about-tag-yellow">WSB</span> (follow the crowd). Both paper and live trading are supported.</p>
+          </div>
+
+          <hr class="about-divider" />
+
+          <div class="about-section">
+            <h3>Entry Logic</h3>
+            <ul>
+              <li><strong>Market open evaluation</strong> &mdash; At 9:30 AM EST, the bot evaluates time-decay weighted sentiment from the past 48 hours. Comments closer to market open count more: 1.0x within 2.5h, 0.7x at 2.5&ndash;5.5h, 0.5x at 5.5&ndash;17.5h, and 0.3x beyond.</li>
+              <li><strong>Retry on HOLD</strong> &mdash; If the sentiment spread is under 5% (HOLD), the bot retries at 10:00 AM, 10:30 AM, and 11:00 AM. After 11:00 AM, theta decay makes 0DTE entry too risky, so the bot skips the day.</li>
+              <li><strong>Option selection</strong> &mdash; The bot picks 0DTE SPY contracts in the ATM to 1.5% OTM zone, optimizing for the contract that maximizes (number of contracts) &times; (proximity to ATM).</li>
+              <li><strong>Position sizing</strong> &mdash; Based on the configured risk level:
+                <span class="about-tag about-tag-green">Safe 30%</span>
+                <span class="about-tag about-tag-yellow">Degen 50%</span>
+                <span class="about-tag about-tag-red">YOLO 70%</span>
+                of total portfolio equity is allocated per trade.</li>
+            </ul>
+          </div>
+
+          <hr class="about-divider" />
+
+          <div class="about-section">
+            <h3>Exit Logic</h3>
+            <ul>
+              <li><strong>Profit target</strong> &mdash; The position is closed when the option price rises 10% above entry.</li>
+              <li><strong>Stop loss</strong> &mdash; Hard stop at 20% below entry price. If the option drops 20%, the position is immediately closed.</li>
+              <li><strong>Trailing stop</strong> &mdash; Once profit exceeds 10%, the bot switches to a trailing stop set at 50% of unrealized profit. For example, if the option is up 30%, the trailing stop triggers at +15%. This lets winners run while locking in gains.</li>
+              <li><strong>End of day</strong> &mdash; At 3:45 PM EST, any remaining open position is closed to avoid expiration risk.</li>
+              <li><strong>Monitoring</strong> &mdash; Open positions are checked every 1 second for exit conditions.</li>
+            </ul>
+          </div>
+
+          <hr class="about-divider" />
+
+          <div class="about-section">
+            <h3>Execution</h3>
+            <ul>
+              <li>Trades are placed via the <strong>Alpaca Markets API</strong> using market orders for options.</li>
+              <li>Each trade is logged to the database with entry/exit prices, P&amp;L, and the sentiment signal that triggered it.</li>
+              <li>The bot resets daily &mdash; the trade tracker clears at market open, allowing one trade per day per bot.</li>
+            </ul>
           </div>
         </div>
       </div>

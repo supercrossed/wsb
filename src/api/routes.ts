@@ -368,6 +368,15 @@ function getNetworkBytes(): { rx: number; tx: number } {
 let prevCpuIdle = 0;
 let prevCpuTotal = 0;
 
+function getCpuTemp(): number | null {
+  try {
+    const raw = fs.readFileSync("/sys/class/thermal/thermal_zone0/temp", "utf-8");
+    return Math.round(parseInt(raw, 10) / 100) / 10; // millidegrees → °C with 1 decimal
+  } catch {
+    return null;
+  }
+}
+
 function getCpuUsage(): number {
   try {
     const stat = fs.readFileSync("/proc/stat", "utf-8");
@@ -398,6 +407,7 @@ router.get("/api/system", (_req: Request, res: Response) => {
   const usedMem = totalMem - freeMem;
 
   const cpu = getCpuUsage();
+  const cpuTemp = getCpuTemp();
 
   const now = Date.now();
   const net = getNetworkBytes();
@@ -440,9 +450,12 @@ router.get("/api/system", (_req: Request, res: Response) => {
       used: usedMem,
       percent: Math.round((usedMem / totalMem) * 10000) / 100,
     },
+    cpuTemp,
     network: {
       rxBytesPerSec: Math.round(rxRate),
       txBytesPerSec: Math.round(txRate),
+      totalRx: net.rx,
+      totalTx: net.tx,
     },
     uptime,
     hostname: os.hostname(),

@@ -1533,13 +1533,19 @@
               </div>
               <span class="hw-stat-sub" id="hwRamSub">--</span>
             </div>
+            <div class="hw-stat" id="hwTempStat" style="display:none">
+              <span class="hw-stat-label">CPU Temp</span>
+              <span class="hw-stat-value" id="hwCpuTemp">--</span>
+            </div>
             <div class="hw-stat">
               <span class="hw-stat-label">Net RX</span>
               <span class="hw-stat-value" id="hwNetRx">--</span>
+              <span class="hw-stat-sub" id="hwNetRxTotal">--</span>
             </div>
             <div class="hw-stat">
               <span class="hw-stat-label">Net TX</span>
               <span class="hw-stat-value" id="hwNetTx">--</span>
+              <span class="hw-stat-sub" id="hwNetTxTotal">--</span>
             </div>
           </div>
           <div class="hw-uptime" id="hwUptime">--</div>
@@ -2628,6 +2634,20 @@
           document.getElementById("hwNetTx").textContent = formatBytes(
             d.network.txBytesPerSec,
           );
+
+          // Total data usage since boot
+          document.getElementById("hwNetRxTotal").textContent =
+            "Total: " + formatMB(d.network.totalRx);
+          document.getElementById("hwNetTxTotal").textContent =
+            "Total: " + formatMB(d.network.totalTx);
+
+          // CPU temperature (Linux only)
+          if (d.cpuTemp !== null && d.cpuTemp !== undefined) {
+            document.getElementById("hwTempStat").style.display = "";
+            var tempEl = document.getElementById("hwCpuTemp");
+            tempEl.textContent = d.cpuTemp.toFixed(1) + "°C";
+            tempEl.style.color = d.cpuTemp >= 80 ? "var(--red)" : d.cpuTemp >= 65 ? "var(--yellow)" : "";
+          }
 
           document.getElementById("hwUptime").textContent =
             d.hostname + " up " + formatUptime(d.uptime);

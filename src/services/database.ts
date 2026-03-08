@@ -199,6 +199,18 @@ export function initDatabase(dbPath: string): Database.Database {
     logger.info("Migrated comments: added score column");
   }
 
+  // Migrate daily_sentiment: add raw_comment_count column if missing
+  const sentimentColInfo = db
+    .prepare("PRAGMA table_info(daily_sentiment)")
+    .all() as { name: string }[];
+  const sentimentColNames = new Set(sentimentColInfo.map((c) => c.name));
+  if (!sentimentColNames.has("raw_comment_count")) {
+    db.exec(
+      "ALTER TABLE daily_sentiment ADD COLUMN raw_comment_count INTEGER NOT NULL DEFAULT 0",
+    );
+    logger.info("Migrated daily_sentiment: added raw_comment_count column");
+  }
+
   logger.info("Database initialized", { path: dbPath });
   return db;
 }
@@ -258,8 +270,8 @@ export function saveFullComment(
 
 export function saveDailySentiment(entry: DailySentiment): void {
   const stmt = getDb().prepare(`
-    INSERT OR REPLACE INTO daily_sentiment (date, bullish_count, bearish_count, neutral_count, total_comments, bullish_percent, bearish_percent, neutral_percent, recommendation, thread_type, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    INSERT OR REPLACE INTO daily_sentiment (date, bullish_count, bearish_count, neutral_count, total_comments, raw_comment_count, bullish_percent, bearish_percent, neutral_percent, recommendation, thread_type, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
   `);
   stmt.run(
     entry.date,
@@ -267,6 +279,7 @@ export function saveDailySentiment(entry: DailySentiment): void {
     entry.bearishCount,
     entry.neutralCount,
     entry.totalComments,
+    entry.rawCommentCount,
     entry.bullishPercent,
     entry.bearishPercent,
     entry.neutralPercent,
@@ -288,6 +301,7 @@ export function getTodaySentiment(date: string): DailySentiment | undefined {
     bearishCount: row.bearish_count as number,
     neutralCount: row.neutral_count as number,
     totalComments: row.total_comments as number,
+    rawCommentCount: (row.raw_comment_count as number) || 0,
     bullishPercent: row.bullish_percent as number,
     bearishPercent: row.bearish_percent as number,
     neutralPercent: row.neutral_percent as number,
@@ -309,6 +323,7 @@ export function getSentimentHistory(days: number): DailySentiment[] {
     bearishCount: row.bearish_count as number,
     neutralCount: row.neutral_count as number,
     totalComments: row.total_comments as number,
+    rawCommentCount: (row.raw_comment_count as number) || 0,
     bullishPercent: row.bullish_percent as number,
     bearishPercent: row.bearish_percent as number,
     neutralPercent: row.neutral_percent as number,
@@ -360,26 +375,29 @@ export function getRecentOutcomes(limit: number = 5): HistoricalEntry[] {
 export function getCommentCountSince(
   sinceUtc: number,
   threadType?: ThreadType,
-): { bullish: number; bearish: number; neutral: number } {
+): { bullish: number; bearish: number; neutral: number; rawTotal: number } {
   // Upvote-weighted aggregation: each comment's vote is weighted by max(score, 1).
   // A comment with 100 upvotes counts 100x more than a comment with 1.
   // Floor score at 1 so downvoted comments still count once (prevents zero/negative weight).
   const query = threadType
-    ? "SELECT sentiment, SUM(MAX(score, 1)) as weight FROM comments WHERE created_utc >= ? AND thread_type = ? GROUP BY sentiment"
-    : "SELECT sentiment, SUM(MAX(score, 1)) as weight FROM comments WHERE created_utc >= ? GROUP BY sentiment";
+    ? "SELECT sentiment, SUM(MAX(score, 1)) as weight, COUNT(*) as cnt FROM comments WHERE created_utc >= ? AND thread_type = ? GROUP BY sentiment"
+    : "SELECT sentiment, SUM(MAX(score, 1)) as weight, COUNT(*) as cnt FROM comments WHERE created_utc >= ? GROUP BY sentiment";
 
   const rows = threadType
     ? (getDb().prepare(query).all(sinceUtc, threadType) as {
         sentiment: string;
         weight: number;
+        cnt: number;
       }[])
     : (getDb().prepare(query).all(sinceUtc) as {
         sentiment: string;
         weight: number;
+        cnt: number;
       }[]);
 
-  const result = { bullish: 0, bearish: 0, neutral: 0 };
+  const result = { bullish: 0, bearish: 0, neutral: 0, rawTotal: 0 };
   for (const row of rows) {
+    result.rawTotal += row.cnt;
     if (row.sentiment === "bullish") result.bullish = row.weight;
     else if (row.sentiment === "bearish") result.bearish = row.weight;
     else result.neutral = row.weight;

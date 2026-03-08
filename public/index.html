@@ -1391,7 +1391,7 @@
               </div>
             </div>
             <div class="total-comments">
-              <span id="totalComments">0</span> comments analyzed
+              <span id="totalComments">0</span> comments analyzed · <span id="weightedScore">0</span> weighted score
             </div>
           </div>
 
@@ -1720,6 +1720,7 @@
             document.getElementById("bullishPct").textContent = "--";
             document.getElementById("bearishPct").textContent = "--";
             document.getElementById("totalComments").textContent = "0";
+            document.getElementById("weightedScore").textContent = "0";
             document.getElementById("recommendation").textContent = "WAIT";
             document.getElementById("recommendation").className = "action hold";
             document.getElementById("recTagline").textContent = "";
@@ -1753,6 +1754,8 @@
           document.getElementById("bearishPct").textContent =
             bearPct.toFixed(1) + "%";
           document.getElementById("totalComments").textContent =
+            (s.rawCommentCount || s.totalComments).toLocaleString();
+          document.getElementById("weightedScore").textContent =
             s.totalComments.toLocaleString();
 
           // Sentiment bar

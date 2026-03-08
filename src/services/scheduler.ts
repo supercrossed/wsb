@@ -237,6 +237,7 @@ async function pollAndAnalyze(): Promise<void> {
       bearishCount: counts.bearish,
       neutralCount: counts.neutral,
       totalComments: total,
+      rawCommentCount: counts.rawTotal,
       bullishPercent,
       bearishPercent,
       neutralPercent,

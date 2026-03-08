@@ -33,6 +33,7 @@ export interface DailySentiment {
   bearishCount: number;
   neutralCount: number;
   totalComments: number;
+  rawCommentCount: number;
   bullishPercent: number;
   bearishPercent: number;
   neutralPercent: number;

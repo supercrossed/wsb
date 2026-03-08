@@ -172,7 +172,17 @@ async function pollAndAnalyze(): Promise<void> {
       const topPostsRaw = await fetchTopPosts();
       const dateStr = getTradingDateString();
 
+      let consecutivePostFailures = 0;
       for (const post of topPostsRaw) {
+        // Bail if rate limited on multiple consecutive posts
+        if (consecutivePostFailures >= 3) {
+          logger.warn("Skipping remaining top posts after 3 consecutive failures", {
+            processed: topPostsRaw.indexOf(post),
+            total: topPostsRaw.length,
+          });
+          break;
+        }
+
         // Analyze the post title for sentiment
         const titleResult = analyzeSentiment(post.title);
         const topPost: TopPost = {
@@ -184,22 +194,27 @@ async function pollAndAnalyze(): Promise<void> {
         saveTopPost(topPost, dateStr);
 
         // Fetch and analyze comments from this post
-        const postComments = await fetchPostComments(post.id, post.permalink);
-        for (const comment of postComments) {
-          const result = analyzeSentiment(comment.body);
-          const inserted = saveFullComment(
-            comment.id,
-            comment.body,
-            comment.author,
-            comment.createdUtc,
-            comment.score,
-            comment.threadId,
-            comment.threadType,
-            result.sentiment,
-            result.confidence,
-            result.tickers,
-          );
-          if (inserted) newCount++;
+        try {
+          const postComments = await fetchPostComments(post.id, post.permalink);
+          consecutivePostFailures = 0;
+          for (const comment of postComments) {
+            const result = analyzeSentiment(comment.body);
+            const inserted = saveFullComment(
+              comment.id,
+              comment.body,
+              comment.author,
+              comment.createdUtc,
+              comment.score,
+              comment.threadId,
+              comment.threadType,
+              result.sentiment,
+              result.confidence,
+              result.tickers,
+            );
+            if (inserted) newCount++;
+          }
+        } catch {
+          consecutivePostFailures++;
         }
       }
 

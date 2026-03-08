@@ -139,7 +139,7 @@ export async function findActiveThread(
   const searchQueries: Record<ThreadType, string[]> = {
     daily: ["daily discussion thread", "what are your moves today"],
     overnight: ["what are your moves tomorrow"],
-    weekend: ["weekend discussion thread", "what are your moves tomorrow"],
+    weekend: ["weekend discussion thread"],
   };
 
   const queries = searchQueries[threadType];

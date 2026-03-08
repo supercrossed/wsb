@@ -70,7 +70,7 @@ const WSB_PHRASE_SCORES: Array<{ pattern: RegExp; score: number }> = [
   { pattern: /\bcan('t|not)\s+(go\s+)?tits\s*up/i, score: 3 },
   { pattern: /\bwe\s*(are\s+)?eating\s+good/i, score: 3 },
   { pattern: /\bcoiled\s+(spring|up)/i, score: 3 },
-  { pattern: /\blet('s|s)?\s*(fuckin(g)?\s+)?go+\b/i, score: 3 },
+  { pattern: /\blet('s|s)?\s*(fuckin(g)?\s+)?go+\s*!+/i, score: 3 }, // "let's gooo!" — require exclamation to filter non-financial usage
   // "send it" removed — excitement but not directional
   // "fomo" removed — can be buying or selling panic
   { pattern: /\bpaper\s*hands?\s*(bitch(es)?|sold)/i, score: 3 },
@@ -121,7 +121,7 @@ const SARCASM_PATTERNS: RegExp[] = [
   /\bclown\s+market\b/i,
   /\bhow\s+could\s+this\s+(possibly\s+)?go\s+(wrong|tits\s*up)\b/i,
   /\bgreat\s+time\s+to\s+(buy|go\s+long)\s*[!.]*\s*\/{1}/i, // "great time to buy /s"
-  /\btrust\s+me\s+bro\b/i,
+  // "trust me bro" removed — used genuinely on WSB as often as sarcastically
   /\b(works?\s+)?every\s+time\s*[!.]*$/im, // "works every time" at end of comment
   /\bprice\s+target\s*:?\s*\$?0\b/i,
 ];
@@ -211,7 +211,7 @@ const WSB_LEXICON: Record<string, number> = {
   "rip": 2,
   "ripping": 2,
   "calls": 2,
-  "call": 1,
+  // "call" removed — too common in non-financial English ("call my mom")
   "green": 2,
   "brr": 2,
   "brrr": 2,
@@ -257,7 +257,7 @@ const WSB_LEXICON: Record<string, number> = {
   "tank": -2,
   "tanking": -2,
   "puts": -2,
-  "put": -1,
+  // "put" removed — too common in non-financial English ("put it down")
   "red": -2,
   "crash": -3,
   "crashing": -3,
@@ -272,7 +272,7 @@ const WSB_LEXICON: Record<string, number> = {
   "downies": -2,
   "cliff": -2,
   "fade": -1,
-  "copium": -2,
+  // "copium" removed — already scored in WSB_PHRASE_SCORES (-3)
   // "regarded" removed — WSB self-deprecation, not directional
   // "degen" removed — self-deprecating, not bearish
   "overleveraged": -3,
@@ -381,23 +381,39 @@ export function analyzeSentiment(text: string): SentimentResult {
   // 3. Emoji scoring
   const emojiScore = scoreEmojis(text);
 
+  const isSarcastic = detectSarcasm(text);
+  const isPastTense = detectPastTense(text);
+
   // Combine scores: phrase patterns get highest weight since they're most WSB-specific
   // NLP handles general language, emojis add color
   let totalScore = nlpScore + (phraseScore * 1.5) + emojiScore;
 
-  // 4. Sarcasm detection: invert the score when sarcasm is detected.
-  // WSB sarcasm almost always means the opposite of what's said.
-  // e.g., "what could go wrong" with a bullish score → actually bearish.
-  if (detectSarcasm(text)) {
-    totalScore = -totalScore;
+  // 4. Conflict detection: when sarcasm is detected alongside strong directional
+  // WSB phrases, the layers fundamentally disagree. Rather than blindly inverting
+  // (which creates false signals), discard as neutral. Only invert when the score
+  // is weak enough that sarcasm is the dominant signal.
+  if (isSarcastic) {
+    if (Math.abs(phraseScore) >= 3) {
+      // Strong WSB phrase + sarcasm = ambiguous. Discard to neutral.
+      totalScore = 0;
+    } else {
+      // Weak or no phrase signal: sarcasm is the primary signal, invert safely.
+      totalScore = -totalScore;
+    }
   }
 
   // 5. Temporal awareness: discount past-tense comments.
   // Past-tense = reporting on what happened, not forward-looking sentiment.
   // Reduce magnitude by 70% so they still count slightly but don't dominate.
-  if (detectPastTense(text)) {
+  if (isPastTense) {
     totalScore *= 0.3;
   }
+
+  // 6. Layer agreement check: if NLP and WSB phrases disagree in direction,
+  // the comment likely has mixed signals. Reduce confidence.
+  const nlpDirection = Math.sign(nlpScore);
+  const phraseDirection = Math.sign(phraseScore);
+  const layersDisagree = nlpDirection !== 0 && phraseDirection !== 0 && nlpDirection !== phraseDirection;
 
   let sentiment: SentimentType;
   let confidence: number;
@@ -411,7 +427,12 @@ export function analyzeSentiment(text: string): SentimentResult {
     confidence = Math.min(Math.abs(totalScore) / 10, 1);
   } else {
     sentiment = "neutral";
-    confidence = 1 - Math.abs(totalScore); // High confidence when score is near 0
+    confidence = 1 - Math.abs(totalScore);
+  }
+
+  // When layers disagree, halve confidence (mixed signals = less certainty)
+  if (layersDisagree) {
+    confidence *= 0.5;
   }
 
   return {

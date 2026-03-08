@@ -262,9 +262,16 @@ async function pollAndAnalyze(): Promise<void> {
       logger.warn("Failed to fetch top posts", { error: message });
     }
 
-    // Recompute daily sentiment from all comments in this period
-    const periodStart = getThreadStartUtc(threadType);
-    const counts = getCommentCountSince(periodStart, threadType);
+    // Recompute daily sentiment from all comments in this period.
+    // During transition windows (Sun 4 PM → Mon 7 AM), aggregate across all
+    // thread types from the weekend start so the dashboard reflects the full picture.
+    const hasSecondary = secondaryTypes.length > 0;
+    const periodStart = hasSecondary
+      ? getThreadStartUtc("weekend")
+      : getThreadStartUtc(threadType);
+    const counts = hasSecondary
+      ? getCommentCountSince(periodStart)
+      : getCommentCountSince(periodStart, threadType);
     const total = counts.bullish + counts.bearish + counts.neutral;
 
     if (total === 0) return;

@@ -2831,21 +2831,29 @@
         }
       }
 
-      async function editBotRisk(mode, paperTrading, currentRisk) {
-        const levels = ["safe", "degen", "yolo"];
-        const labels = { safe: "Safe (30%)", degen: "Degen (50%)", yolo: "YOLO (70%)" };
-        const nextIdx = (levels.indexOf(currentRisk) + 1) % levels.length;
-        const newRisk = levels[nextIdx];
-        if (!confirm("Change risk level to " + labels[newRisk] + "?")) return;
+      function toggleBotSettings(mode, paperTrading) {
+        var panelId = "tb-settings-" + mode + "-" + (paperTrading ? "paper" : "live");
+        var panel = document.getElementById(panelId);
+        if (panel) {
+          panel.style.display = panel.style.display === "none" ? "block" : "none";
+        }
+      }
+
+      async function saveBotRisk(mode, paperTrading, panelId) {
+        var panel = document.getElementById(panelId);
+        var activeBtn = panel.querySelector(".tb-risk-btn.active");
+        if (!activeBtn) return;
+        var newRisk = activeBtn.dataset.risk;
         try {
-          const res = await fetch("/api/tradebot/settings", {
+          var res = await fetch("/api/tradebot/settings", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mode, paperTrading, riskLevel: newRisk, tradeType: "0dte" }),
+            body: JSON.stringify({ mode: mode, paperTrading: paperTrading, riskLevel: newRisk, tradeType: "0dte" }),
           });
-          const data = await res.json();
+          var data = await res.json();
           if (!res.ok || !data.success) {
             alert(data.error || "Failed to update risk level.");
+            return;
           }
           fetchAllBotStatuses();
         } catch (err) {
@@ -2927,22 +2935,52 @@
               "</div>" +
               '<div class="tb-bot-row-actions">' +
               btnHtml +
-              '<button class="tb-btn" style="opacity:0.8;" onclick="editBotRisk(\'' +
-              bot.mode +
-              "'," +
-              bot.paperTrading +
-              ",'" +
-              risk +
-              "'" +
+              '<button class="tb-btn" style="opacity:0.8;" onclick="toggleBotSettings(\'' +
+              bot.mode + "'," + bot.paperTrading +
               ')">Edit</button>' +
               '<button class="tb-btn tb-btn-danger" style="opacity:0.7;" onclick="confirmDeleteBot(\'' +
-              bot.mode +
-              "'," +
-              bot.paperTrading +
+              bot.mode + "'," + bot.paperTrading +
               ')">Delete</button>' +
               "</div>";
 
             container.appendChild(row);
+
+            // Inline expandable settings panel
+            var panelId = "tb-settings-" + bot.mode + "-" + (bot.paperTrading ? "paper" : "live");
+            var settingsPanel = document.createElement("div");
+            settingsPanel.id = panelId;
+            settingsPanel.style.cssText = "display:none; padding:12px 16px 16px 52px; margin-top:-4px; border-bottom:1px solid var(--border);";
+            var riskBtns = ["safe", "degen", "yolo"].map(function(lvl) {
+              var pcts = { safe: "30%", degen: "50%", yolo: "70%" };
+              var active = lvl === risk ? " active" : "";
+              return '<button class="tb-risk-btn' + active + '" data-risk="' + lvl +
+                '" style="padding:6px 14px; margin-right:6px; border-radius:6px; border:1px solid var(--border); background:' +
+                (lvl === risk ? "var(--blue)" : "var(--surface-raised)") +
+                '; color:' + (lvl === risk ? "#fff" : "var(--text)") +
+                '; cursor:pointer; font-size:0.78rem; font-weight:600; text-transform:uppercase;">' +
+                lvl + " " + pcts[lvl] + "</button>";
+            }).join("");
+            settingsPanel.innerHTML =
+              '<div style="margin-bottom:8px; font-size:0.75rem; color:var(--text-muted); font-weight:600;">RISK LEVEL</div>' +
+              '<div style="margin-bottom:10px;">' + riskBtns + '</div>' +
+              '<button class="tb-btn tb-btn-success" style="font-size:0.75rem; padding:5px 16px;" onclick="saveBotRisk(\'' +
+              bot.mode + "'," + bot.paperTrading + ",'" + panelId + "'" +
+              ')">Save</button>';
+            container.appendChild(settingsPanel);
+
+            // Wire up risk button clicks within this panel
+            settingsPanel.querySelectorAll(".tb-risk-btn").forEach(function(btn) {
+              btn.addEventListener("click", function() {
+                settingsPanel.querySelectorAll(".tb-risk-btn").forEach(function(b) {
+                  b.classList.remove("active");
+                  b.style.background = "var(--surface-raised)";
+                  b.style.color = "var(--text)";
+                });
+                btn.classList.add("active");
+                btn.style.background = "var(--blue)";
+                btn.style.color = "#fff";
+              });
+            });
 
             // Show positions inline if bot has any
             if (bot.positions && bot.positions.length > 0) {

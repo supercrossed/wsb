@@ -2704,11 +2704,11 @@
           }
 
           // Streak dots from historical data (last 5 completed days)
-          const outcomes = scorecardData.recentOutcomes || [];
+          var streakOutcomes = scorecardData.recentOutcomes || [];
           const streakContainer = document.getElementById("spyStreak");
           streakContainer.innerHTML =
             '<span class="spy-streak-label">Last 5:</span>';
-          const streakDays = outcomes.slice(0, 5);
+          const streakDays = streakOutcomes.slice(0, 5);
           for (const day of streakDays) {
             const dot = document.createElement("div");
             if (day.inverseCorrect === true) {

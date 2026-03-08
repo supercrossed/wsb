@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.4.1] - 2026-03-08
+
+Captures Sunday 4 PM "What Are Your Moves Tomorrow" thread. Scheduler now polls both the weekend and overnight threads during the Sunday 4 PM → Monday 7 AM transition window so no comments are missed. All comments flow into the trade engine's 48h time-decay lookback for Monday's 9:30 AM trade evaluation.
+
 ## [1.4.0] - 2026-03-08
 
 Trade engine now uses time-decay weighted sentiment: comments closer to market open count more (1.0x within 2.5h, 0.7x 2.5–5.5h, 0.5x 5.5–17.5h, 0.3x beyond). Pulls raw comments from a 48-hour lookback window and combines upvote weight with decay multiplier for more accurate trade signals.

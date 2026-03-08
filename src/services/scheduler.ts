@@ -8,6 +8,7 @@ import {
   fetchTopPosts,
   fetchPostComments,
   getActiveThreadType,
+  getSecondaryThreadTypes,
 } from "./reddit";
 import { analyzeSentiment, getInverseRecommendation } from "./sentiment";
 import {
@@ -165,6 +166,40 @@ async function pollAndAnalyze(): Promise<void> {
         result.tickers,
       );
       if (inserted) newCount++;
+    }
+
+    // Poll secondary threads during transition windows (e.g. weekend → overnight on Sunday 4 PM)
+    const secondaryTypes = getSecondaryThreadTypes();
+    for (const secType of secondaryTypes) {
+      try {
+        const secThread = await findActiveThread(secType);
+        if (secThread) {
+          const secComments = await fetchThreadComments(secThread, secType);
+          for (const comment of secComments) {
+            const result = analyzeSentiment(comment.body);
+            const inserted = saveFullComment(
+              comment.id,
+              comment.body,
+              comment.author,
+              comment.createdUtc,
+              comment.score,
+              comment.threadId,
+              comment.threadType,
+              result.sentiment,
+              result.confidence,
+              result.tickers,
+            );
+            if (inserted) newCount++;
+          }
+          logger.info("Secondary thread polled", {
+            threadType: secType,
+            fetched: secComments.length,
+          });
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        logger.warn("Secondary thread poll failed", { threadType: secType, error: message });
+      }
     }
 
     // Fetch top 10 WSB posts and their comments

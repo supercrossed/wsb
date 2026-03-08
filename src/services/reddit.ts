@@ -81,8 +81,8 @@ async function redditFetch<T>(url: string, retries = 0): Promise<T> {
 /**
  * Determines which thread type should be active based on current EST time.
  * - "daily": 7:00 AM - 3:59 PM EST weekdays
- * - "overnight": 4:00 PM - 6:59 AM EST next day weekdays
- * - "weekend": Friday 4:00 PM - Monday 6:59 AM
+ * - "overnight": 4:00 PM - 6:59 AM EST next day (includes Sunday 4 PM+)
+ * - "weekend": Friday 4:00 PM - Sunday 3:59 PM EST
  */
 export function getActiveThreadType(): ThreadType {
   const now = new Date();
@@ -92,16 +92,41 @@ export function getActiveThreadType(): ThreadType {
   const hour = est.getHours();
   const day = est.getDay(); // 0=Sun, 6=Sat
 
-  // Weekend: Sat all day, Sun all day, Fri after 4pm, Mon before 7am
+  // Sunday after 4 PM: "What Are Your Moves Tomorrow" thread drops
+  if (day === 0 && hour >= 16) return "overnight";
+
+  // Weekend: Sat all day, Sun before 4pm, Fri after 4pm, Mon before 7am
   if (day === 0 || day === 6) return "weekend";
   if (day === 5 && hour >= 16) return "weekend";
-  if (day === 1 && hour < 7) return "weekend";
+  if (day === 1 && hour < 7) return "overnight";
 
   // Market hours
   if (hour >= 7 && hour < 16) return "daily";
 
   // Overnight
   return "overnight";
+}
+
+/**
+ * Returns additional thread types to poll alongside the primary one.
+ * During transition windows, we want to capture comments from both threads:
+ * - Sunday 4 PM+: primary is overnight ("moves tomorrow"), also poll weekend
+ * - Monday before 7 AM: primary is overnight, also poll weekend
+ */
+export function getSecondaryThreadTypes(): ThreadType[] {
+  const now = new Date();
+  const est = new Date(
+    now.toLocaleString("en-US", { timeZone: "America/New_York" }),
+  );
+  const hour = est.getHours();
+  const day = est.getDay();
+
+  // Sunday 4 PM+ or Monday before 7 AM: also poll the weekend thread
+  if ((day === 0 && hour >= 16) || (day === 1 && hour < 7)) {
+    return ["weekend"];
+  }
+
+  return [];
 }
 
 /**
@@ -114,7 +139,7 @@ export async function findActiveThread(
   const searchQueries: Record<ThreadType, string[]> = {
     daily: ["daily discussion thread", "what are your moves today"],
     overnight: ["what are your moves tomorrow"],
-    weekend: ["weekend discussion thread"],
+    weekend: ["weekend discussion thread", "what are your moves tomorrow"],
   };
 
   const queries = searchQueries[threadType];

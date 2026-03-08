@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.3.1] - 2026-03-08
+
+Dashboard shows raw comment count and weighted score separately. Fixed rate limit death spiral on morechildren expansion. Data feed no longer overwrites live sentiment on restart.
+
+
 ## [1.3.0] - 2026-03-08
 
 Enhanced sentiment analysis: upvote-weighted scoring, sarcasm detection, temporal awareness. Position monitor now checks every 1 second.

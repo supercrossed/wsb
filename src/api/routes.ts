@@ -18,6 +18,9 @@ import {
   getAllTradeBotConfigs,
   getRecentTradeLogs,
   updateTradeSettings,
+  getTradePerformance,
+  getTradeRounds,
+  getEquityHistory,
 } from "../services/database";
 import { fetchSpyToday, fetchSpyRealtime } from "../services/spy";
 import { getActiveThreadType } from "../services/reddit";
@@ -677,6 +680,36 @@ router.get("/api/tradebot/logs", (req: Request, res: Response) => {
   );
   const logs = getRecentTradeLogs(mode, limit);
   res.json({ logs });
+});
+
+/**
+ * GET /api/tradebot/performance?mode=wsb|inverse&paper=true|false
+ * Returns aggregated trade performance stats and recent round-trip trades.
+ */
+router.get("/api/tradebot/performance", (req: Request, res: Response) => {
+  const mode = (req.query.mode as TradeBotMode) || null;
+  const paper = req.query.paper === undefined ? null : req.query.paper === "true";
+  const stats = getTradePerformance(mode, paper);
+  const rounds = getTradeRounds(mode, paper, 20);
+  res.json({ stats, rounds });
+});
+
+/**
+ * GET /api/tradebot/equity-history?mode=wsb&paper=true&days=30
+ * Returns equity snapshots for chart display.
+ */
+router.get("/api/tradebot/equity-history", (req: Request, res: Response) => {
+  const mode = req.query.mode as TradeBotMode;
+  const paper = req.query.paper === "true";
+  const days = Math.min(parseInt((req.query.days as string) ?? "90", 10), 365);
+
+  if (!mode) {
+    res.status(400).json({ error: "mode is required" });
+    return;
+  }
+
+  const snapshots = getEquityHistory(mode, paper, days);
+  res.json({ snapshots });
 });
 
 export { router };

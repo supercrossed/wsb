@@ -1397,6 +1397,72 @@
         text-align: center;
       }
 
+      /* Performance stats */
+      .tb-perf-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin-top: 12px;
+      }
+      @media (max-width: 600px) {
+        .tb-perf-grid { grid-template-columns: repeat(2, 1fr); }
+      }
+      .tb-perf-stat {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px 12px;
+        text-align: center;
+      }
+      .tb-perf-value {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 1.3rem;
+        font-weight: 700;
+        display: block;
+      }
+      .tb-perf-label {
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-top: 4px;
+        display: block;
+      }
+      .tb-perf-empty {
+        color: var(--text-muted);
+        font-size: 0.82rem;
+        text-align: center;
+        padding: 30px 0;
+      }
+      .tb-rounds-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.78rem;
+        margin-top: 16px;
+      }
+      .tb-rounds-table th {
+        text-align: left;
+        color: var(--text-muted);
+        font-weight: 600;
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--border);
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .tb-rounds-table td {
+        padding: 8px 8px;
+        border-bottom: 1px solid rgba(30,39,50,0.5);
+        font-family: "JetBrains Mono", monospace;
+      }
+      .tb-equity-chart-wrap {
+        position: relative;
+        height: 250px;
+        margin-top: 12px;
+      }
+      .pnl-pos { color: var(--green); }
+      .pnl-neg { color: var(--red); }
+
       /* About page */
       .about-section { margin-bottom: 28px; }
       .about-section:last-child { margin-bottom: 0; }
@@ -1790,8 +1856,24 @@
           </div>
         </div>
 
+        <!-- Performance Summary -->
+        <div class="card" style="margin-top: 20px">
+          <h2>Performance</h2>
+          <div id="tbPerfContent">
+            <div class="tb-perf-empty">No completed trades yet. Stats will appear after your first round-trip trade.</div>
+          </div>
+        </div>
+
+        <!-- Equity Timeline -->
+        <div class="card" style="margin-top: 20px">
+          <h2>Equity Timeline</h2>
+          <div id="tbEquityContent">
+            <div class="tb-perf-empty">Equity snapshots will appear here once the bot starts trading.</div>
+          </div>
+        </div>
+
         <!-- Trade Log -->
-        <div class="card tb-log-card">
+        <div class="card tb-log-card" style="margin-top: 20px">
           <h2>Trade Log</h2>
           <div id="tbLogContent">
             <div class="tb-log-empty">
@@ -1936,6 +2018,8 @@
             fetchTradeBotConfigs();
             fetchAllBotStatuses();
             fetchTradeBotLogs();
+            fetchTradePerformance();
+            fetchEquityHistory();
           }
         });
       });
@@ -3429,12 +3513,20 @@
 
           let html =
             '<table class="tb-log-table"><thead><tr>' +
-            "<th>Time</th><th>Bot</th><th>Action</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Price</th><th>Status</th>" +
+            "<th>Time</th><th>Bot</th><th>Action</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Price</th><th>P&L</th><th>Status</th>" +
             "</tr></thead><tbody>";
 
           for (const log of data.logs) {
             const sideColor =
               log.side === "buy" ? "var(--green)" : "var(--red)";
+            // Parse P&L from close messages: "P/L: $-150.00" or "(P/L: $342.50)"
+            var pnlMatch = log.message.match(/P\/L:\s*\$([-\d,.]+)/);
+            var pnlHtml = "--";
+            if (pnlMatch) {
+              var pnlVal = parseFloat(pnlMatch[1].replace(",", ""));
+              var pnlClass = pnlVal >= 0 ? "pnl-pos" : "pnl-neg";
+              pnlHtml = '<span class="' + pnlClass + '">$' + pnlVal.toFixed(2) + '</span>';
+            }
             html +=
               "<tr>" +
               "<td>" +
@@ -3461,6 +3553,9 @@
               (log.price ? "$" + log.price.toFixed(2) : "--") +
               "</td>" +
               "<td>" +
+              pnlHtml +
+              "</td>" +
+              "<td>" +
               log.status +
               "</td>" +
               "</tr>";
@@ -3470,6 +3565,145 @@
           container.innerHTML = html;
         } catch (err) {
           console.warn("Trade bot logs fetch failed:", err);
+        }
+      }
+
+      async function fetchTradePerformance() {
+        try {
+          var res = await fetch("/api/tradebot/performance");
+          var data = await res.json();
+          var container = document.getElementById("tbPerfContent");
+          var s = data.stats;
+
+          if (!s || s.totalTrades === 0) {
+            container.innerHTML =
+              '<div class="tb-perf-empty">No completed trades yet. Stats will appear after your first round-trip trade.</div>';
+            return;
+          }
+
+          var pnlClass = s.totalPnl >= 0 ? "pnl-pos" : "pnl-neg";
+          var avgClass = s.avgPnl >= 0 ? "pnl-pos" : "pnl-neg";
+          var bestClass = s.bestTrade >= 0 ? "pnl-pos" : "pnl-neg";
+          var worstClass = s.worstTrade >= 0 ? "pnl-pos" : "pnl-neg";
+
+          var html = '<div class="tb-perf-grid">';
+          html += '<div class="tb-perf-stat"><span class="tb-perf-value">' + s.totalTrades + '</span><span class="tb-perf-label">Trades</span></div>';
+          html += '<div class="tb-perf-stat"><span class="tb-perf-value">' + s.winRate.toFixed(1) + '%</span><span class="tb-perf-label">Win Rate</span></div>';
+          html += '<div class="tb-perf-stat"><span class="tb-perf-value ' + pnlClass + '">$' + s.totalPnl.toFixed(2) + '</span><span class="tb-perf-label">Total P&L</span></div>';
+          html += '<div class="tb-perf-stat"><span class="tb-perf-value ' + avgClass + '">$' + s.avgPnl.toFixed(2) + '</span><span class="tb-perf-label">Avg P&L</span></div>';
+          html += '<div class="tb-perf-stat"><span class="tb-perf-value">' + s.wins + ' / ' + s.losses + '</span><span class="tb-perf-label">W / L</span></div>';
+          html += '<div class="tb-perf-stat"><span class="tb-perf-value ' + bestClass + '">$' + s.bestTrade.toFixed(2) + '</span><span class="tb-perf-label">Best Trade</span></div>';
+          html += '<div class="tb-perf-stat"><span class="tb-perf-value ' + worstClass + '">$' + s.worstTrade.toFixed(2) + '</span><span class="tb-perf-label">Worst Trade</span></div>';
+          var profitFactor = s.avgLoss !== 0 ? Math.abs(s.avgWin / s.avgLoss).toFixed(1) : "--";
+          html += '<div class="tb-perf-stat"><span class="tb-perf-value">' + profitFactor + '</span><span class="tb-perf-label">Profit Factor</span></div>';
+          html += '</div>';
+
+          // Recent rounds table
+          if (data.rounds && data.rounds.length > 0) {
+            html += '<table class="tb-rounds-table"><thead><tr>';
+            html += '<th>Date</th><th>Direction</th><th>Symbol</th><th>Entry</th><th>Exit</th><th>P&L</th><th>Reason</th>';
+            html += '</tr></thead><tbody>';
+            for (var r of data.rounds) {
+              var rpClass = r.pnlDollars >= 0 ? "pnl-pos" : "pnl-neg";
+              html += '<tr>';
+              html += '<td>' + r.tradeDate + '</td>';
+              html += '<td style="text-transform:uppercase;font-weight:700;color:' + (r.direction === "calls" ? "var(--green)" : "var(--red)") + '">' + r.direction + '</td>';
+              html += '<td style="color:var(--blue)">' + r.symbol.substring(0, 20) + '</td>';
+              html += '<td>$' + r.entryPrice.toFixed(2) + '</td>';
+              html += '<td>' + (r.exitPrice ? '$' + r.exitPrice.toFixed(2) : '--') + '</td>';
+              html += '<td class="' + rpClass + '">$' + (r.pnlDollars || 0).toFixed(2) + ' (' + (r.pnlPercent || 0).toFixed(1) + '%)</td>';
+              html += '<td style="color:var(--text-muted);font-size:0.72rem">' + (r.exitReason || '--').replace(/_/g, ' ') + '</td>';
+              html += '</tr>';
+            }
+            html += '</tbody></table>';
+          }
+
+          container.innerHTML = html;
+        } catch (err) {
+          console.warn("Trade performance fetch failed:", err);
+        }
+      }
+
+      var equityChartInstance = null;
+
+      async function fetchEquityHistory() {
+        try {
+          // Determine which bot to show (use first configured bot)
+          var configRes = await fetch("/api/tradebot/configs");
+          var configData = await configRes.json();
+          if (!configData.configs || configData.configs.length === 0) return;
+
+          var cfg = configData.configs[0];
+          var res = await fetch("/api/tradebot/equity-history?mode=" + cfg.mode + "&paper=" + cfg.paperTrading + "&days=90");
+          var data = await res.json();
+          var container = document.getElementById("tbEquityContent");
+
+          if (!data.snapshots || data.snapshots.length === 0) {
+            container.innerHTML =
+              '<div class="tb-perf-empty">Equity snapshots will appear here once the bot starts trading.</div>';
+            return;
+          }
+
+          // Ensure canvas exists
+          if (!document.getElementById("equityChart")) {
+            container.innerHTML = '<div class="tb-equity-chart-wrap"><canvas id="equityChart"></canvas></div>';
+          }
+
+          var labels = data.snapshots.map(function(s) { return s.timestamp.split("T")[0]; });
+          var equities = data.snapshots.map(function(s) { return s.equity; });
+
+          var ctx = document.getElementById("equityChart").getContext("2d");
+          if (equityChartInstance) {
+            equityChartInstance.data.labels = labels;
+            equityChartInstance.data.datasets[0].data = equities;
+            equityChartInstance.update();
+            return;
+          }
+
+          equityChartInstance = new Chart(ctx, {
+            type: "line",
+            data: {
+              labels: labels,
+              datasets: [{
+                label: "Equity",
+                data: equities,
+                borderColor: "#58a6ff",
+                backgroundColor: "rgba(88,166,255,0.08)",
+                fill: true,
+                tension: 0.3,
+                pointRadius: 3,
+                pointHoverRadius: 6,
+                borderWidth: 2,
+              }],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  callbacks: {
+                    label: function(ctx) { return "$" + ctx.parsed.y.toFixed(2); },
+                  },
+                },
+              },
+              scales: {
+                x: {
+                  ticks: { color: "#6e7a88", maxTicksLimit: 10 },
+                  grid: { color: "rgba(30,39,50,0.5)" },
+                },
+                y: {
+                  ticks: {
+                    color: "#6e7a88",
+                    callback: function(v) { return "$" + v.toLocaleString(); },
+                  },
+                  grid: { color: "rgba(30,39,50,0.5)" },
+                },
+              },
+            },
+          });
+        } catch (err) {
+          console.warn("Equity history fetch failed:", err);
         }
       }
 

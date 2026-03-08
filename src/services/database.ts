@@ -16,6 +16,9 @@ import type {
   TradeBotConfig,
   TradeBotMode,
   TradeLog,
+  TradeRound,
+  TradePerformance,
+  EquitySnapshot,
 } from "../types";
 
 let db: Database.Database;
@@ -133,6 +136,42 @@ export function initDatabase(dbPath: string): Database.Database {
 
     CREATE INDEX IF NOT EXISTS idx_trade_log_timestamp ON trade_log(timestamp);
     CREATE INDEX IF NOT EXISTS idx_trade_log_mode ON trade_log(mode);
+
+    CREATE TABLE IF NOT EXISTS trade_rounds (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      mode TEXT NOT NULL,
+      paper_trading INTEGER NOT NULL,
+      trade_date TEXT NOT NULL,
+      symbol TEXT NOT NULL,
+      direction TEXT NOT NULL,
+      qty REAL NOT NULL,
+      entry_price REAL NOT NULL,
+      exit_price REAL,
+      entry_time TEXT NOT NULL,
+      exit_time TEXT,
+      entry_log_id INTEGER NOT NULL,
+      exit_log_id INTEGER,
+      exit_reason TEXT,
+      pnl_dollars REAL,
+      pnl_percent REAL,
+      status TEXT NOT NULL DEFAULT 'open'
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_trade_rounds_date ON trade_rounds(trade_date);
+    CREATE INDEX IF NOT EXISTS idx_trade_rounds_mode ON trade_rounds(mode, paper_trading);
+
+    CREATE TABLE IF NOT EXISTS equity_snapshots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      mode TEXT NOT NULL,
+      paper_trading INTEGER NOT NULL,
+      snapshot_date TEXT NOT NULL,
+      timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+      equity REAL NOT NULL,
+      cash REAL NOT NULL,
+      UNIQUE(mode, paper_trading, snapshot_date)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_equity_snapshots_lookup ON equity_snapshots(mode, paper_trading, snapshot_date);
   `);
 
   // Migrate tradebot_config: change UNIQUE(mode) to UNIQUE(mode, paper_trading)
@@ -840,8 +879,8 @@ export function migrateKeysToEncrypted(): void {
   }
 }
 
-export function insertTradeLog(log: Omit<TradeLog, "id" | "timestamp">): void {
-  getDb()
+export function insertTradeLog(log: Omit<TradeLog, "id" | "timestamp">): number {
+  const result = getDb()
     .prepare(
       `
     INSERT INTO trade_log (mode, action, symbol, side, qty, price, order_id, status, message)
@@ -859,6 +898,7 @@ export function insertTradeLog(log: Omit<TradeLog, "id" | "timestamp">): void {
       log.status,
       log.message,
     );
+  return Number(result.lastInsertRowid);
 }
 
 export function getRecentTradeLogs(
@@ -885,5 +925,200 @@ export function getRecentTradeLogs(
     orderId: row.order_id as string | null,
     status: row.status as TradeLog["status"],
     message: row.message as string,
+  }));
+}
+
+// --- Trade Rounds ---
+
+export function insertTradeRound(round: {
+  mode: TradeBotMode;
+  paperTrading: boolean;
+  tradeDate: string;
+  symbol: string;
+  direction: "calls" | "puts";
+  qty: number;
+  entryPrice: number;
+  entryTime: string;
+  entryLogId: number;
+}): number {
+  const result = getDb()
+    .prepare(
+      `INSERT INTO trade_rounds (mode, paper_trading, trade_date, symbol, direction, qty, entry_price, entry_time, entry_log_id, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')`,
+    )
+    .run(
+      round.mode,
+      round.paperTrading ? 1 : 0,
+      round.tradeDate,
+      round.symbol,
+      round.direction,
+      round.qty,
+      round.entryPrice,
+      round.entryTime,
+      round.entryLogId,
+    );
+  return Number(result.lastInsertRowid);
+}
+
+export function closeTradeRound(
+  id: number,
+  exitPrice: number,
+  exitTime: string,
+  exitLogId: number,
+  exitReason: string,
+  pnlDollars: number,
+  pnlPercent: number,
+): void {
+  getDb()
+    .prepare(
+      `UPDATE trade_rounds
+       SET exit_price = ?, exit_time = ?, exit_log_id = ?, exit_reason = ?,
+           pnl_dollars = ?, pnl_percent = ?, status = 'closed'
+       WHERE id = ?`,
+    )
+    .run(exitPrice, exitTime, exitLogId, exitReason, pnlDollars, pnlPercent, id);
+}
+
+export function getOpenTradeRound(
+  mode: TradeBotMode,
+  paperTrading: boolean,
+): TradeRound | null {
+  const row = getDb()
+    .prepare(
+      `SELECT * FROM trade_rounds WHERE mode = ? AND paper_trading = ? AND status = 'open' LIMIT 1`,
+    )
+    .get(mode, paperTrading ? 1 : 0) as Record<string, unknown> | undefined;
+
+  if (!row) return null;
+  return mapTradeRound(row);
+}
+
+export function getTradeRounds(
+  mode: TradeBotMode | null,
+  paperTrading: boolean | null,
+  limit: number = 50,
+): TradeRound[] {
+  let query = "SELECT * FROM trade_rounds WHERE status = 'closed'";
+  const params: unknown[] = [];
+
+  if (mode !== null) {
+    query += " AND mode = ?";
+    params.push(mode);
+  }
+  if (paperTrading !== null) {
+    query += " AND paper_trading = ?";
+    params.push(paperTrading ? 1 : 0);
+  }
+
+  query += " ORDER BY trade_date DESC, exit_time DESC LIMIT ?";
+  params.push(limit);
+
+  const rows = getDb().prepare(query).all(...params) as Record<string, unknown>[];
+  return rows.map(mapTradeRound);
+}
+
+function mapTradeRound(row: Record<string, unknown>): TradeRound {
+  return {
+    id: row.id as number,
+    mode: row.mode as TradeBotMode,
+    paperTrading: (row.paper_trading as number) === 1,
+    tradeDate: row.trade_date as string,
+    symbol: row.symbol as string,
+    direction: row.direction as "calls" | "puts",
+    qty: row.qty as number,
+    entryPrice: row.entry_price as number,
+    exitPrice: row.exit_price as number | null,
+    entryTime: row.entry_time as string,
+    exitTime: row.exit_time as string | null,
+    entryLogId: row.entry_log_id as number,
+    exitLogId: row.exit_log_id as number | null,
+    exitReason: row.exit_reason as string | null,
+    pnlDollars: row.pnl_dollars as number | null,
+    pnlPercent: row.pnl_percent as number | null,
+    status: row.status as "open" | "closed",
+  };
+}
+
+export function getTradePerformance(
+  mode: TradeBotMode | null,
+  paperTrading: boolean | null,
+): TradePerformance {
+  let query = `
+    SELECT
+      COUNT(*) as total_trades,
+      SUM(CASE WHEN pnl_dollars > 0 THEN 1 ELSE 0 END) as wins,
+      SUM(CASE WHEN pnl_dollars <= 0 THEN 1 ELSE 0 END) as losses,
+      ROUND(SUM(pnl_dollars), 2) as total_pnl,
+      ROUND(AVG(pnl_dollars), 2) as avg_pnl,
+      ROUND(MAX(pnl_dollars), 2) as best_trade,
+      ROUND(MIN(pnl_dollars), 2) as worst_trade,
+      ROUND(AVG(CASE WHEN pnl_dollars > 0 THEN pnl_dollars END), 2) as avg_win,
+      ROUND(AVG(CASE WHEN pnl_dollars <= 0 THEN pnl_dollars END), 2) as avg_loss
+    FROM trade_rounds
+    WHERE status = 'closed'`;
+  const params: unknown[] = [];
+
+  if (mode !== null) {
+    query += " AND mode = ?";
+    params.push(mode);
+  }
+  if (paperTrading !== null) {
+    query += " AND paper_trading = ?";
+    params.push(paperTrading ? 1 : 0);
+  }
+
+  const row = getDb().prepare(query).get(...params) as Record<string, unknown>;
+  const total = (row.total_trades as number) || 0;
+  const wins = (row.wins as number) || 0;
+
+  return {
+    totalTrades: total,
+    wins,
+    losses: (row.losses as number) || 0,
+    winRate: total > 0 ? Math.round((wins / total) * 1000) / 10 : 0,
+    totalPnl: (row.total_pnl as number) || 0,
+    avgPnl: (row.avg_pnl as number) || 0,
+    bestTrade: (row.best_trade as number) || 0,
+    worstTrade: (row.worst_trade as number) || 0,
+    avgWin: (row.avg_win as number) || 0,
+    avgLoss: (row.avg_loss as number) || 0,
+  };
+}
+
+// --- Equity Snapshots ---
+
+export function insertEquitySnapshot(
+  mode: TradeBotMode,
+  paperTrading: boolean,
+  snapshotDate: string,
+  equity: number,
+  cash: number,
+): void {
+  getDb()
+    .prepare(
+      `INSERT OR REPLACE INTO equity_snapshots (mode, paper_trading, snapshot_date, equity, cash)
+       VALUES (?, ?, ?, ?, ?)`,
+    )
+    .run(mode, paperTrading ? 1 : 0, snapshotDate, equity, cash);
+}
+
+export function getEquityHistory(
+  mode: TradeBotMode,
+  paperTrading: boolean,
+  days: number = 30,
+): EquitySnapshot[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT timestamp, equity, cash FROM equity_snapshots
+       WHERE mode = ? AND paper_trading = ?
+       AND snapshot_date >= date('now', '-' || ? || ' days')
+       ORDER BY snapshot_date ASC`,
+    )
+    .all(mode, paperTrading ? 1 : 0, days) as Record<string, unknown>[];
+
+  return rows.map((row) => ({
+    timestamp: row.timestamp as string,
+    equity: row.equity as number,
+    cash: row.cash as number,
   }));
 }

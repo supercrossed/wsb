@@ -152,3 +152,42 @@ export interface TradeLog {
   status: "submitted" | "filled" | "cancelled" | "error";
   message: string;
 }
+
+export interface TradeRound {
+  id: number;
+  mode: TradeBotMode;
+  paperTrading: boolean;
+  tradeDate: string;
+  symbol: string;
+  direction: "calls" | "puts";
+  qty: number;
+  entryPrice: number;
+  exitPrice: number | null;
+  entryTime: string;
+  exitTime: string | null;
+  entryLogId: number;
+  exitLogId: number | null;
+  exitReason: string | null;
+  pnlDollars: number | null;
+  pnlPercent: number | null;
+  status: "open" | "closed";
+}
+
+export interface TradePerformance {
+  totalTrades: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  totalPnl: number;
+  avgPnl: number;
+  bestTrade: number;
+  worstTrade: number;
+  avgWin: number;
+  avgLoss: number;
+}
+
+export interface EquitySnapshot {
+  timestamp: string;
+  equity: number;
+  cash: number;
+}

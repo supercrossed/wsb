@@ -11,6 +11,10 @@ import {
   getAllTradeBotConfigs,
   insertTradeLog,
   getTimeDecayedSentiment,
+  insertTradeRound,
+  closeTradeRound,
+  getOpenTradeRound,
+  insertEquitySnapshot,
 } from "./database";
 import { getInverseRecommendation } from "./sentiment";
 
@@ -72,6 +76,7 @@ interface ActivePosition {
   qty: number;
   highWaterMark: number; // highest price seen (for trailing stop)
   creds: AlpacaCredentials;
+  tradeRoundId: number; // links to trade_rounds.id
 }
 
 const activePositions: Map<string, ActivePosition> = new Map();
@@ -106,6 +111,14 @@ function isMarketHours(): boolean {
   const minutes = est.getMinutes();
   const timeMinutes = hours * 60 + minutes;
   return timeMinutes >= 570 && timeMinutes < 960; // 9:30 AM - 4:00 PM
+}
+
+function parseExitReason(reason: string): string {
+  if (reason.startsWith("Stop loss")) return "stop_loss";
+  if (reason.startsWith("Market close")) return "eod_close";
+  if (reason.startsWith("Trailing stop")) return "trailing_stop";
+  if (reason.startsWith("Momentum fade")) return "momentum_fade";
+  return "other";
 }
 
 function isNearClose(): boolean {
@@ -446,7 +459,7 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
       orderId: order.id,
     });
 
-    insertTradeLog({
+    const entryLogId = insertTradeLog({
       mode: cfg.mode,
       action: `0dte_${signal.toLowerCase()}`,
       symbol: option.symbol,
@@ -458,6 +471,21 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
       message: `${signal} ${qty}x ${option.type.toUpperCase()} SPY $${option.strikePrice} @ $${option.estimatedPrice.toFixed(2)} [${cfg.riskLevel}]`,
     });
 
+    const roundId = insertTradeRound({
+      mode: cfg.mode,
+      paperTrading: cfg.paperTrading,
+      tradeDate: getTodayEST(),
+      symbol: option.symbol,
+      direction: signal.toLowerCase() as "calls" | "puts",
+      qty,
+      entryPrice: option.estimatedPrice,
+      entryTime: new Date().toISOString(),
+      entryLogId,
+    });
+
+    // Snapshot equity at entry
+    insertEquitySnapshot(cfg.mode, cfg.paperTrading, getTodayEST(), equity, parseFloat((await getAccount(creds)).cash));
+
     // Track for position monitoring
     activePositions.set(botKey, {
       botKey,
@@ -468,6 +496,7 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
       qty,
       highWaterMark: option.estimatedPrice,
       creds,
+      tradeRoundId: roundId,
     });
 
     tradedToday.set(botKey, true);
@@ -572,7 +601,7 @@ async function monitorPositions(): Promise<void> {
           const order = await closePosition(pos.creds, pos.optionSymbol);
           const dollarPnl = (currentPrice - pos.entryPrice) * pos.qty * 100;
 
-          insertTradeLog({
+          const exitLogId = insertTradeLog({
             mode: pos.mode,
             action: "close_position",
             symbol: pos.optionSymbol,
@@ -583,6 +612,22 @@ async function monitorPositions(): Promise<void> {
             status: "submitted",
             message: `${reason} | Sold ${pos.qty}x @ $${currentPrice.toFixed(2)} (P/L: $${dollarPnl.toFixed(2)})`,
           });
+
+          closeTradeRound(
+            pos.tradeRoundId,
+            currentPrice,
+            new Date().toISOString(),
+            exitLogId,
+            parseExitReason(reason),
+            dollarPnl,
+            pnlPct * 100,
+          );
+
+          // Snapshot equity after close
+          try {
+            const acct = await getAccount(pos.creds);
+            insertEquitySnapshot(pos.mode, pos.paperTrading, getTodayEST(), parseFloat(acct.equity), parseFloat(acct.cash));
+          } catch { /* non-critical */ }
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err);
           logger.error("Close position failed", {
@@ -672,7 +717,7 @@ export async function closeBeforeMarketClose(): Promise<void> {
   for (const [botKey, pos] of activePositions.entries()) {
     try {
       const order = await closePosition(pos.creds, pos.optionSymbol);
-      insertTradeLog({
+      const exitLogId = insertTradeLog({
         mode: pos.mode,
         action: "eod_close",
         symbol: pos.optionSymbol,
@@ -683,6 +728,23 @@ export async function closeBeforeMarketClose(): Promise<void> {
         status: "submitted",
         message: `End-of-day close for ${pos.optionSymbol}`,
       });
+
+      // Close the trade round — estimate P&L from entry price (actual fill price not yet known)
+      closeTradeRound(
+        pos.tradeRoundId,
+        pos.entryPrice, // best estimate; actual fill may differ slightly
+        new Date().toISOString(),
+        exitLogId,
+        "eod_close",
+        0, // P&L unknown without fill price
+        0,
+      );
+
+      // Snapshot equity
+      try {
+        const acct = await getAccount(pos.creds);
+        insertEquitySnapshot(pos.mode, pos.paperTrading, getTodayEST(), parseFloat(acct.equity), parseFloat(acct.cash));
+      } catch { /* non-critical */ }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error("EOD close failed", {
@@ -735,6 +797,48 @@ export async function closeBeforeMarketClose(): Promise<void> {
       }
     } catch {
       // Ignore — already logged
+    }
+  }
+}
+
+/**
+ * Captures daily equity snapshots for all enabled bot configs.
+ * Called by scheduler at 4:01 PM EST on weekdays.
+ */
+export async function captureEquitySnapshots(): Promise<void> {
+  const configs = getAllTradeBotConfigs();
+  const today = getTodayEST();
+
+  for (const cfg of configs) {
+    if (!cfg.enabled) continue;
+
+    const creds: AlpacaCredentials = {
+      apiKeyId: cfg.apiKeyId,
+      apiSecretKey: cfg.apiSecretKey,
+      paperTrading: cfg.paperTrading,
+    };
+
+    try {
+      const acct = await getAccount(creds);
+      insertEquitySnapshot(
+        cfg.mode,
+        cfg.paperTrading,
+        today,
+        parseFloat(acct.equity),
+        parseFloat(acct.cash),
+      );
+      logger.info("Equity snapshot captured", {
+        mode: cfg.mode,
+        paper: cfg.paperTrading,
+        equity: acct.equity,
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.warn("Equity snapshot failed", {
+        mode: cfg.mode,
+        paper: cfg.paperTrading,
+        error: msg,
+      });
     }
   }
 }

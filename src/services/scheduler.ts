@@ -29,6 +29,7 @@ import {
   closeBeforeMarketClose,
   resetDailyTrades,
   startPositionMonitor,
+  captureEquitySnapshots,
 } from "./trade-engine";
 import type { DailySentiment, ThreadType, TopPost } from "../types";
 
@@ -403,6 +404,15 @@ export function startScheduler(): void {
     "45 15 * * 1-5",
     () => {
       closeBeforeMarketClose();
+    },
+    { timezone: "America/New_York" },
+  );
+
+  // Capture daily equity snapshots at 4:01 PM EST (after market close).
+  cron.schedule(
+    "1 16 * * 1-5",
+    () => {
+      captureEquitySnapshots();
     },
     { timezone: "America/New_York" },
   );

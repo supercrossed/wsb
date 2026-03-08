@@ -29,6 +29,9 @@ Runs on an Orange Pi Zero 2 and serves a dashboard on your local network.
 - Live SPY price ticker with daily change
 - 90-day historical sentiment trend with SPY price overlay
 - Inverse strategy accuracy tracking with cumulative win rate
+- System card with CPU usage, CPU temp, RAM, network rates + total data usage, uptime, version + update status
+- Trade bot cards with inline risk level badges and editable settings
+- About page explaining the full sentiment pipeline and trade bot mechanics
 
 ## API Endpoints
 
@@ -41,6 +44,7 @@ Runs on an Orange Pi Zero 2 and serves a dashboard on your local network.
 | `/api/top-posts` | GET | Today's top 10 WSB posts with sentiment |
 | `/api/spy/today` | GET | Current SPY price and daily change |
 | `/api/spy/history?days=90` | GET | SPY prices from historical table |
+| `/api/system` | GET | CPU, RAM, network, temp, version, update status |
 | `/api/status` | GET | App status and config info |
 | `/api/poll` | POST | Manually trigger a poll cycle |
 
@@ -171,6 +175,9 @@ src/
     scheduler.ts         # 60s poll loop, top posts, SPY backfill, sentiment aggregation
     sentiment.ts         # NLP + emoji + WSB phrase + sarcasm + temporal analysis
     spy.ts               # Yahoo Finance SPY price fetching
+    trade-engine.ts      # 0DTE SPY options entry/exit logic
+    tradebot.ts          # Trade bot state management
+    alpaca.ts            # Alpaca Markets API client
   types/index.ts         # TypeScript interfaces
   server.ts              # Express server
   index.ts               # Entry point

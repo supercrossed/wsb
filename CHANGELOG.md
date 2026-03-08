@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.6.0] - 2026-03-08
+
+- **About page**: new dashboard tab explaining how sentiment analysis works, the seven-layer pipeline, upvote weighting, inverse recommendations, and full trade bot mechanics (entry/exit logic, risk levels, option selection)
+- **Sticky nav bar**: navigation tabs no longer scroll under the header
+- **System card**: CPU temperature (Linux), total network data usage since boot, app version with live update status, info tooltips on "comments analyzed" and "weighted score"
+- **Trade bot UX**: risk level badge and inline edit panel on each bot card (replaces hidden dropdown), risk buttons with Save instead of cycling popup
+- **Trade engine**: safe risk level updated to 30%, HOLD retry at 10:00/10:30/11:00 AM with 11 AM cutoff (no longer skips the day on first HOLD)
+
 ## [1.5.0] - 2026-03-08
 
 Added WSB degen slang to sentiment engine: bers/bols/buls misspellings with context-aware scoring (e.g. "bers r fuk" = bullish, "bols r fuk" = bearish), thundercock (bullish), joever/cooked (bearish), "us bols/bers" identity patterns, and bear/bull mocking phrases. Removed ambiguous standalone patterns that conflicted with context-aware ones.

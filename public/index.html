@@ -669,6 +669,10 @@
         color: var(--blue);
         font-weight: 700;
       }
+      .info-wrap {
+        display: inline;
+        position: relative;
+      }
       .info-icon {
         display: inline-flex;
         align-items: center;
@@ -690,15 +694,31 @@
         color: var(--blue);
       }
       .info-tooltip {
+        display: none;
+        position: absolute;
+        bottom: calc(100% + 8px);
+        left: 50%;
+        transform: translateX(-50%);
         background: var(--surface-raised);
         border: 1px solid var(--border);
         border-radius: 8px;
         padding: 10px 14px;
-        margin-top: 8px;
         font-size: 0.74rem;
         line-height: 1.5;
         color: var(--text-muted);
         text-align: left;
+        width: 280px;
+        z-index: 200;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      }
+      .info-tooltip::after {
+        content: "";
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 6px solid transparent;
+        border-top-color: var(--border);
       }
 
       .thread-badge {
@@ -1572,15 +1592,15 @@
             </div>
             <div class="total-comments">
               <span id="totalComments">0</span> comments analyzed
-              <span class="info-icon" onclick="toggleTooltip('tipComments')" title="What is this?">?</span>
+              <span class="info-wrap">
+                <span class="info-icon" onclick="toggleTooltip(event,'tipComments')">?</span>
+                <div class="info-tooltip" id="tipComments">Total unique comments fetched from the active WSB discussion thread and top 10 hot posts. Each comment is analyzed for bullish, bearish, or neutral sentiment using NLP, WSB phrase patterns, emoji scoring, sarcasm detection, and financial relevance gating.</div>
+              </span>
               · <span id="weightedScore">0</span> weighted score
-              <span class="info-icon" onclick="toggleTooltip('tipWeighted')" title="What is this?">?</span>
-            </div>
-            <div class="info-tooltip" id="tipComments" style="display:none">
-              Total unique comments fetched from the active WSB discussion thread and top 10 hot posts. Each comment is analyzed for bullish, bearish, or neutral sentiment using NLP, WSB phrase patterns, emoji scoring, sarcasm detection, and financial relevance gating. Duplicates are filtered by the database.
-            </div>
-            <div class="info-tooltip" id="tipWeighted" style="display:none">
-              The weighted score reflects community conviction. Each comment's sentiment vote is multiplied by its Reddit upvotes &mdash; a comment with 50 upvotes counts 50x more than one with 1. This lets the community's own voting amplify strong signals and suppress noise. The bullish/bearish percentages and CALLS/PUTS/HOLD recommendation are driven by this weighted score, not the raw comment count.
+              <span class="info-wrap">
+                <span class="info-icon" onclick="toggleTooltip(event,'tipWeighted')">?</span>
+                <div class="info-tooltip" id="tipWeighted">Each comment's sentiment vote is multiplied by its Reddit upvotes &mdash; a comment with 50 upvotes counts 50x more than one with 1. The bullish/bearish percentages and recommendation are driven by this weighted score, not the raw count.</div>
+              </span>
             </div>
           </div>
 
@@ -2813,10 +2833,25 @@
         }
       }
 
-      function toggleTooltip(id) {
+      function toggleTooltip(e, id) {
+        e.stopPropagation();
         var el = document.getElementById(id);
         if (!el) return;
-        el.style.display = el.style.display === "none" ? "block" : "none";
+        // Close any other open tooltips
+        document.querySelectorAll(".info-tooltip").forEach(function(t) {
+          if (t.id !== id) t.style.display = "none";
+        });
+        var isOpen = el.style.display === "block";
+        el.style.display = isOpen ? "none" : "block";
+        if (!isOpen) {
+          // Close on next click anywhere
+          setTimeout(function() {
+            document.addEventListener("click", function closeHandler() {
+              el.style.display = "none";
+              document.removeEventListener("click", closeHandler);
+            }, { once: true });
+          }, 0);
+        }
       }
 
       function formatBytes(bytes) {

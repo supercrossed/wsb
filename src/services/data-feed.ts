@@ -82,21 +82,13 @@ export async function importDataFeed(): Promise<void> {
       }
 
       if (feed.sentiment && feed.sentiment.length > 0) {
+        // Only backfill past sentiment — never overwrite current/future dates
+        // which are actively being computed from live comment data
         const sentimentStmt = getDb().prepare(`
           INSERT INTO daily_sentiment (date, bullish_count, bearish_count, neutral_count, total_comments,
             bullish_percent, bearish_percent, neutral_percent, recommendation, thread_type, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-          ON CONFLICT(date) DO UPDATE SET
-            bullish_count = excluded.bullish_count,
-            bearish_count = excluded.bearish_count,
-            neutral_count = excluded.neutral_count,
-            total_comments = excluded.total_comments,
-            bullish_percent = excluded.bullish_percent,
-            bearish_percent = excluded.bearish_percent,
-            neutral_percent = excluded.neutral_percent,
-            recommendation = excluded.recommendation,
-            thread_type = excluded.thread_type,
-            updated_at = datetime('now')
+          ON CONFLICT(date) DO NOTHING
         `);
 
         for (const s of feed.sentiment) {

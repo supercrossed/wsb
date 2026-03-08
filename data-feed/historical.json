@@ -47,13 +47,13 @@
     },
     {
       "date": "2026-03-09",
-      "bullish_count": 890,
-      "bearish_count": 810,
-      "neutral_count": 11496,
-      "total_comments": 13196,
-      "bullish_percent": 6.74,
-      "bearish_percent": 6.14,
-      "neutral_percent": 87.12,
+      "bullish_count": 0,
+      "bearish_count": 0,
+      "neutral_count": 0,
+      "total_comments": 0,
+      "bullish_percent": 0,
+      "bearish_percent": 0,
+      "neutral_percent": 0,
       "recommendation": "HOLD",
       "thread_type": "weekend"
     }

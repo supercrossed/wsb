@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.5.0] - 2026-03-08
+
+Added WSB degen slang to sentiment engine: bers/bols/buls misspellings with context-aware scoring (e.g. "bers r fuk" = bullish, "bols r fuk" = bearish), thundercock (bullish), joever/cooked (bearish), "us bols/bers" identity patterns, and bear/bull mocking phrases. Removed ambiguous standalone patterns that conflicted with context-aware ones.
+
 ## [1.4.1] - 2026-03-08
 
 Captures Sunday 4 PM "What Are Your Moves Tomorrow" thread. Scheduler now polls both the weekend and overnight threads during the Sunday 4 PM → Monday 7 AM transition window so no comments are missed. All comments flow into the trade engine's 48h time-decay lookback for Monday's 9:30 AM trade evaluation.

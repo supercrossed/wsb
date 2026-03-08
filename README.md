@@ -11,7 +11,8 @@ Runs on an Orange Pi Zero 2 and serves a dashboard on your local network.
 1. **Polls Reddit every 60 seconds** — fetches comments from the active WSB discussion thread (daily, overnight, or weekend) plus the top 10 hot posts and their comments
 2. **Analyzes sentiment** using a seven-layer system:
    - `sentiment` NLP library for full-sentence analysis
-   - 50+ WSB-specific phrase patterns (context-aware, e.g. "my puts about to rip" = bearish)
+   - 60+ WSB-specific phrase patterns (context-aware, e.g. "my puts about to rip" = bearish, "bers r fuk" = bullish)
+   - WSB degen slang: bers/bols/buls misspellings, thundercock, joever, cooked, mocking patterns
    - Emoji scoring (rocket, bear, diamond hands, etc.)
    - Sarcasm detection (16 patterns like "what could go wrong", "this is fine", "/s" — inverts weak signals, discards ambiguous ones)
    - Temporal awareness (10 past-tense patterns like "expired worthless" — discounts by 70%)
@@ -197,7 +198,9 @@ desktop/
 |--------|--------------|
 | Daily Discussion | 7:00 AM - 3:59 PM weekdays |
 | What Are Your Moves Tomorrow | 4:00 PM - 6:59 AM weekdays |
-| Weekend Discussion | Friday 4:00 PM - Monday 6:59 AM |
+| Weekend Discussion | Friday 4:00 PM - Sunday 3:59 PM |
+
+**Sunday transition:** At 4 PM EST on Sunday, the "What Are Your Moves Tomorrow" thread drops. The scheduler switches to overnight mode and dual-polls both the weekend and overnight threads until Monday 7 AM. All comments feed into the trade engine's 48-hour time-decay lookback.
 
 ## SPY Integration
 
@@ -209,6 +212,44 @@ desktop/
 ## Sentiment Weighting
 
 Comments are **upvote-weighted** — a comment with 50 upvotes counts 50x more than one with 1. This lets the community's own voting amplify signal and suppress noise. The dashboard shows both the raw comment count and the weighted score.
+
+## Debug & Testing Commands
+
+Test the sentiment engine on any comment directly:
+
+```bash
+# Test a comment through the sentiment engine
+node -e "const { analyzeSentiment } = require('./dist/services/sentiment'); console.log(JSON.stringify(analyzeSentiment('bers r fuk we mooning'), null, 2));"
+
+# Test a multi-line comment
+node -e "const { analyzeSentiment } = require('./dist/services/sentiment'); console.log(JSON.stringify(analyzeSentiment('I am permabull but we might correct soon\nwe r fuk'), null, 2));"
+```
+
+Check which thread the scheduler is polling:
+
+```bash
+# View live logs (shows thread type, comment counts, polling status)
+journalctl -u wsb -f
+
+# Check current thread detection
+node -e "const { getActiveThreadType, getSecondaryThreadTypes } = require('./dist/services/reddit'); console.log('Primary:', getActiveThreadType(), 'Secondary:', getSecondaryThreadTypes());"
+```
+
+Query the database directly:
+
+```bash
+# Comment counts by thread type
+node -e "const db = require('better-sqlite3')('data/wsb.db'); console.log(db.prepare('SELECT thread_type, COUNT(*) as count FROM comments GROUP BY thread_type').all());"
+
+# Latest 20 comments with sentiment
+node -e "const db = require('better-sqlite3')('data/wsb.db'); db.prepare('SELECT body, sentiment, confidence FROM comments ORDER BY created_utc DESC LIMIT 20').all().forEach(r => console.log(r.sentiment.padEnd(8), (r.confidence).toFixed(2), r.body.substring(0,80)));"
+
+# Today's sentiment summary
+node -e "const db = require('better-sqlite3')('data/wsb.db'); console.log(db.prepare('SELECT * FROM daily_sentiment ORDER BY date DESC LIMIT 1').get());"
+
+# Check app version
+node -e "console.log(require('./package.json').version);"
+```
 
 ## Future
 

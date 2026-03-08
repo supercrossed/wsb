@@ -1320,6 +1320,26 @@
       .tb-bot-row-mode.wsb {
         color: var(--green);
       }
+      .tb-bot-row-risk {
+        font-size: 0.68rem;
+        font-weight: 700;
+        padding: 3px 8px;
+        border-radius: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .tb-bot-row-risk.safe {
+        background: rgba(0, 200, 83, 0.15);
+        color: var(--green);
+      }
+      .tb-bot-row-risk.degen {
+        background: var(--yellow-dim);
+        color: var(--yellow);
+      }
+      .tb-bot-row-risk.yolo {
+        background: var(--red-dim);
+        color: var(--red);
+      }
       .tb-bot-row-equity {
         font-family: "JetBrains Mono", monospace;
         font-size: 0.82rem;
@@ -2811,6 +2831,28 @@
         }
       }
 
+      async function editBotRisk(mode, paperTrading, currentRisk) {
+        const levels = ["safe", "degen", "yolo"];
+        const labels = { safe: "Safe (30%)", degen: "Degen (50%)", yolo: "YOLO (70%)" };
+        const nextIdx = (levels.indexOf(currentRisk) + 1) % levels.length;
+        const newRisk = levels[nextIdx];
+        if (!confirm("Change risk level to " + labels[newRisk] + "?")) return;
+        try {
+          const res = await fetch("/api/tradebot/settings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode, paperTrading, riskLevel: newRisk, tradeType: "0dte" }),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            alert(data.error || "Failed to update risk level.");
+          }
+          fetchAllBotStatuses();
+        } catch (err) {
+          alert("Network error: " + err.message);
+        }
+      }
+
       async function fetchAllBotStatuses() {
         try {
           const res = await fetch("/api/tradebot/all-status");
@@ -2832,6 +2874,9 @@
             const badgeText = bot.running ? "RUNNING" : "STOPPED";
             const paperLabel = bot.paperTrading ? "Paper" : "Live";
             const paperClass = bot.paperTrading ? "paper" : "live";
+            const risk = bot.riskLevel || "safe";
+            const riskPcts = { safe: "30%", degen: "50%", yolo: "70%" };
+            const riskLabel = risk.toUpperCase() + " " + (riskPcts[risk] || "");
             const equityText =
               bot.accountEquity !== null
                 ? "$" +
@@ -2871,12 +2916,25 @@
               '">' +
               paperLabel +
               "</span>" +
+              '<span class="tb-bot-row-risk ' +
+              risk +
+              '">' +
+              riskLabel +
+              "</span>" +
               '<span class="tb-bot-row-equity">' +
               equityText +
               "</span>" +
               "</div>" +
               '<div class="tb-bot-row-actions">' +
               btnHtml +
+              '<button class="tb-btn" style="opacity:0.8;" onclick="editBotRisk(\'' +
+              bot.mode +
+              "'," +
+              bot.paperTrading +
+              ",'" +
+              risk +
+              "'" +
+              ')">Edit</button>' +
               '<button class="tb-btn tb-btn-danger" style="opacity:0.7;" onclick="confirmDeleteBot(\'' +
               bot.mode +
               "'," +

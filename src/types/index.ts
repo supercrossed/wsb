@@ -121,6 +121,7 @@ export interface TradeBotStatus {
   running: boolean;
   mode: TradeBotMode;
   paperTrading: boolean;
+  riskLevel: RiskLevel;
   accountEquity: number | null;
   accountCash: number | null;
   lastTradeAt: string | null;

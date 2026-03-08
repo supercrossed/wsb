@@ -405,6 +405,61 @@ export function getCommentCountSince(
   return result;
 }
 
+/**
+ * Time-decayed sentiment aggregation for the trade engine.
+ * Comments closer to market open (9:30 AM EST) are weighted more heavily.
+ * This captures the "wavefunction collapse" effect: weekend speculation is
+ * discounted as Monday morning reality-based comments arrive.
+ *
+ * Decay tiers (hours before market open → multiplier):
+ *   0-2.5h  (7:00-9:30 AM daily thread): 1.0x
+ *   2.5-5.5h (4:00-7:00 AM overnight):   0.7x
+ *   5.5-17.5h (Sun 4PM - Mon 4AM):        0.5x
+ *   17.5h+ (weekend / older):              0.3x
+ */
+export function getTimeDecayedSentiment(
+  sinceUtc: number,
+): { bullish: number; bearish: number; neutral: number; rawTotal: number } {
+  // Market open is 9:30 AM EST = 14:30 UTC (or 13:30 UTC during DST)
+  // Use current time as reference point for "how old is this comment"
+  const nowUtc = Math.floor(Date.now() / 1000);
+
+  // Fetch individual comments with their timestamps and scores
+  const rows = getDb()
+    .prepare(
+      "SELECT sentiment, score, created_utc FROM comments WHERE created_utc >= ?",
+    )
+    .all(sinceUtc) as { sentiment: string; score: number; created_utc: number }[];
+
+  const result = { bullish: 0, bearish: 0, neutral: 0, rawTotal: 0 };
+
+  for (const row of rows) {
+    const ageHours = (nowUtc - row.created_utc) / 3600;
+    const upvoteWeight = Math.max(row.score, 1);
+
+    // Time-decay multiplier: fresher comments count more
+    let decayMultiplier: number;
+    if (ageHours <= 2.5) {
+      decayMultiplier = 1.0; // Last 2.5h (daily thread morning)
+    } else if (ageHours <= 5.5) {
+      decayMultiplier = 0.7; // 2.5-5.5h ago (overnight/early morning)
+    } else if (ageHours <= 17.5) {
+      decayMultiplier = 0.5; // 5.5-17.5h ago (previous evening / late night)
+    } else {
+      decayMultiplier = 0.3; // 17.5h+ ago (weekend / old)
+    }
+
+    const weight = upvoteWeight * decayMultiplier;
+    result.rawTotal++;
+
+    if (row.sentiment === "bullish") result.bullish += weight;
+    else if (row.sentiment === "bearish") result.bearish += weight;
+    else result.neutral += weight;
+  }
+
+  return result;
+}
+
 export function saveTopPost(post: TopPost, date: string): void {
   const stmt = getDb().prepare(`
     INSERT OR REPLACE INTO top_posts (id, date, title, author, score, num_comments, created_utc, permalink, sentiment, confidence, tickers, fetched_at)

@@ -10,10 +10,10 @@ import {
 import {
   getAllTradeBotConfigs,
   insertTradeLog,
-  getTodaySentiment,
+  getTimeDecayedSentiment,
 } from "./database";
 import { getInverseRecommendation } from "./sentiment";
-import { getTradingDateString } from "./scheduler";
+
 import { isBotRunning } from "./tradebot";
 import { fetchSpyRealtime } from "./spy";
 import type { AlpacaCredentials, RiskLevel, TradeBotConfig } from "../types";
@@ -292,25 +292,37 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
     paperTrading: cfg.paperTrading,
   };
 
-  // Get sentiment
-  const tradingDate = getTradingDateString();
-  const sentiment = getTodaySentiment(tradingDate);
-  if (!sentiment) {
+  // Get time-decayed sentiment: comments closer to market open count more.
+  // Look back 48h to capture weekend + overnight + morning threads with decay weighting.
+  const lookbackUtc = Math.floor(Date.now() / 1000) - 48 * 3600;
+  const counts = getTimeDecayedSentiment(lookbackUtc);
+  const totalDirectional = counts.bullish + counts.bearish + counts.neutral;
+
+  if (totalDirectional === 0) {
     logger.info("No sentiment data yet", { bot: botLabel });
     return;
   }
 
-  const signal = getSignal(
-    cfg.mode,
-    sentiment.bullishPercent,
-    sentiment.bearishPercent,
-  );
+  const bullishPercent =
+    Math.round((counts.bullish / totalDirectional) * 10000) / 100;
+  const bearishPercent =
+    Math.round((counts.bearish / totalDirectional) * 10000) / 100;
+
+  const signal = getSignal(cfg.mode, bullishPercent, bearishPercent);
+
+  logger.info("Time-decayed sentiment evaluated", {
+    bot: botLabel,
+    bull: bullishPercent,
+    bear: bearishPercent,
+    rawComments: counts.rawTotal,
+    signal,
+  });
 
   if (signal === "HOLD") {
     logger.info("HOLD signal — no trade", {
       bot: botLabel,
-      bull: sentiment.bullishPercent,
-      bear: sentiment.bearishPercent,
+      bull: bullishPercent,
+      bear: bearishPercent,
     });
     insertTradeLog({
       mode: cfg.mode,
@@ -321,7 +333,7 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
       price: null,
       orderId: null,
       status: "cancelled",
-      message: `HOLD (bull=${sentiment.bullishPercent}% bear=${sentiment.bearishPercent}%). No trade.`,
+      message: `HOLD (bull=${bullishPercent}% bear=${bearishPercent}% time-decayed). No trade.`,
     });
     tradedToday.set(botKey, true);
     return;

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import os from "os";
 import fs from "fs";
+import path from "path";
 
 import {
   getTodaySentiment,
@@ -409,6 +410,29 @@ router.get("/api/system", (_req: Request, res: Response) => {
 
   const uptime = os.uptime();
 
+  // Read app version from package.json
+  let version = "unknown";
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf-8"));
+    version = pkg.version;
+  } catch { /* ignore */ }
+
+  // Read update status written by the updater script
+  let updateStatus: { updating: boolean; lastUpdated: string | null } = {
+    updating: false,
+    lastUpdated: null,
+  };
+  try {
+    const statusPath = path.resolve("data", "update-status.json");
+    if (fs.existsSync(statusPath)) {
+      const raw = JSON.parse(fs.readFileSync(statusPath, "utf-8"));
+      updateStatus = {
+        updating: raw.updating === true,
+        lastUpdated: raw.lastUpdated ?? null,
+      };
+    }
+  } catch { /* ignore */ }
+
   res.json({
     cpu,
     ram: {
@@ -425,6 +449,8 @@ router.get("/api/system", (_req: Request, res: Response) => {
     loadAvg: os.loadavg(),
     cpuCount: os.cpus().length,
     cpuModel: os.cpus()[0]?.model ?? "unknown",
+    version,
+    updateStatus,
   });
 });
 

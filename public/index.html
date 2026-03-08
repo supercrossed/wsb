@@ -1483,6 +1483,7 @@
             </div>
           </div>
           <div class="hw-uptime" id="hwUptime">--</div>
+          <div class="hw-uptime" id="hwVersion" style="margin-top:2px;opacity:0.7">--</div>
         </div>
 
         <div class="updated" id="lastUpdated"></div>
@@ -2514,6 +2515,19 @@
         return "green";
       }
 
+      function formatTimeAgo(isoString) {
+        var then = new Date(isoString);
+        var now = new Date();
+        var diffSec = Math.floor((now - then) / 1000);
+        if (diffSec < 60) return "just now";
+        var diffMin = Math.floor(diffSec / 60);
+        if (diffMin < 60) return diffMin + "m ago";
+        var diffHr = Math.floor(diffMin / 60);
+        if (diffHr < 24) return diffHr + "h " + (diffMin % 60) + "m ago";
+        var diffDay = Math.floor(diffHr / 24);
+        return diffDay + "d " + (diffHr % 24) + "h ago";
+      }
+
       function formatMB(bytes) {
         return (bytes / (1024 * 1024)).toFixed(0) + " MB";
       }
@@ -2551,6 +2565,20 @@
 
           document.getElementById("hwUptime").textContent =
             d.hostname + " up " + formatUptime(d.uptime);
+
+          // Version + update status
+          var versionEl = document.getElementById("hwVersion");
+          if (d.updateStatus && d.updateStatus.updating) {
+            versionEl.textContent = "v" + d.version + " \u2022 Updating...";
+            versionEl.style.color = "#f0c040";
+          } else if (d.updateStatus && d.updateStatus.lastUpdated) {
+            var ago = formatTimeAgo(d.updateStatus.lastUpdated);
+            versionEl.textContent = "v" + d.version + " \u2022 Updated " + ago;
+            versionEl.style.color = "";
+          } else {
+            versionEl.textContent = "v" + d.version;
+            versionEl.style.color = "";
+          }
         } catch (err) {
           console.warn("System stats fetch failed:", err);
         }

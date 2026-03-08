@@ -41,6 +41,8 @@ cat > "$WSB_DIR/scripts/update.sh" << 'UPDATER'
 WSB_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$WSB_DIR"
 
+STATUS_FILE="$WSB_DIR/data/update-status.json"
+
 # Fetch latest from remote
 git fetch origin master --quiet
 
@@ -53,9 +55,17 @@ fi
 
 echo "$(date -Iseconds) Update found: $LOCAL -> $REMOTE"
 
+# Signal dashboard that an update is in progress
+mkdir -p "$WSB_DIR/data"
+echo "{\"updating\":true,\"startedAt\":\"$(date -Iseconds)\",\"lastUpdated\":null}" > "$STATUS_FILE"
+
 git pull origin master --quiet
 npm install --quiet
 npm run build --quiet
+
+# Write final status with timestamp before restart
+VERSION=$(node -e "console.log(require('./package.json').version)" 2>/dev/null || echo "unknown")
+echo "{\"updating\":false,\"lastUpdated\":\"$(date -Iseconds)\",\"version\":\"$VERSION\"}" > "$STATUS_FILE"
 
 sudo systemctl restart wsb
 echo "$(date -Iseconds) Update complete, service restarted"

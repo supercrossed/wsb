@@ -98,9 +98,15 @@ const WSB_PHRASE_SCORES: Array<{ pattern: RegExp; score: number }> = [
 
   // Amplifiers with direction — "this is going to drill" vs "this is going to rip"
   { pattern: /\bgonna\s*(drill|tank|dump|crash|die)/i, score: -3 },
-  { pattern: /\bgonna\s*(rip|fly|moon|pump|squeeze|print)/i, score: 3 },
+  { pattern: /\bgonna\s*(rip|fly|moon|pump|squeeze|print|bounce)/i, score: 3 },
   { pattern: /\babout\s*to\s*(drill|tank|dump|crash|die)/i, score: -3 },
-  { pattern: /\babout\s*to\s*(rip|fly|moon|pump|squeeze|print)/i, score: 3 },
+  { pattern: /\babout\s*to\s*(rip|fly|moon|pump|squeeze|print|bounce)/i, score: 3 },
+
+  // Standalone market movement verbs (when used about market/stocks)
+  { pattern: /\b(market|spy|qqq|nasdaq|dow|s&p)\s+(will\s+|gonna\s+|should\s+)?bounce\b/i, score: 3 },
+  { pattern: /\b(market|spy|qqq|nasdaq|dow|s&p)\s+(will\s+|gonna\s+|should\s+)?crater\b/i, score: -3 },
+  { pattern: /\b(market|spy|qqq|nasdaq|dow|s&p)\s+(will\s+|gonna\s+|should\s+)?recover\b/i, score: 3 },
+  { pattern: /\b(market|spy|qqq|nasdaq|dow|s&p)\s+(will\s+|gonna\s+|should\s+)?tank\b/i, score: -3 },
 ];
 
 // --- Sarcasm detection patterns ---
@@ -241,6 +247,10 @@ const WSB_LEXICON: Record<string, number> = {
   "bagger": 2,
   "runner": 2,
   "ripper": 2,
+  "bounce": 2,
+  "bouncing": 2,
+  "recovery": 2,
+  "recovering": 2,
   "explode": 2,
   "exploding": 2,
   "chad": 2,
@@ -296,6 +306,8 @@ const WSB_LEXICON: Record<string, number> = {
   "scam": -3,
   "fraud": -3,
   "nosedive": -3,
+  "crater": -3,
+  "cratering": -3,
   "freefall": -4,
   "implode": -3,
   "imploding": -3,
@@ -370,6 +382,17 @@ function detectPastTense(text: string): boolean {
   return false;
 }
 
+// Detect if a comment is a question (not a directional opinion)
+const QUESTION_PATTERN = /^(did(n'?t)?|do(es)?|is|are|was|were|has|have|had|can|could|would|should|will|what|who|why|how|where|when|isn'?t|aren'?t|wasn'?t|weren'?t)\b/i;
+function isQuestion(text: string): boolean {
+  const trimmed = text.trim();
+  // Starts with question word or ends with "?"
+  return QUESTION_PATTERN.test(trimmed) || trimmed.endsWith("?");
+}
+
+// Check if comment has any financial context (tickers, options terms, market references)
+const FINANCIAL_CONTEXT = /\b(SPY|QQQ|AAPL|TSLA|NVDA|AMD|AMZN|GOOG|META|MSFT|GME|AMC|PLTR|calls?|puts?|options?|shares?|stocks?|market|bull|bear|short|long|position|portfolio|trade|trading|hedge|fed|rate|yield|bonds?|earnings?|GDP|inflation|CPI|FOMC|JPow|tariff|recession|rally|dip|correction|ATH|ticker|\$[A-Z]{1,5})\b/i;
+
 export function analyzeSentiment(text: string): SentimentResult {
   // 1. General NLP score from the sentiment library (analyzes full sentence)
   const nlpResult = analyzer.analyze(text);
@@ -383,10 +406,26 @@ export function analyzeSentiment(text: string): SentimentResult {
 
   const isSarcastic = detectSarcasm(text);
   const isPastTense = detectPastTense(text);
+  const hasFinancialContext = FINANCIAL_CONTEXT.test(text);
+  const questionForm = isQuestion(text);
 
   // Combine scores: phrase patterns get highest weight since they're most WSB-specific
   // NLP handles general language, emojis add color
   let totalScore = nlpScore + (phraseScore * 1.5) + emojiScore;
+
+  // NLP-only gating: if only the NLP layer fires (no WSB phrases, no emojis, no tickers),
+  // the comment is likely non-financial ("Brittney Spears in trouble"). Require stronger
+  // NLP signal or discard to neutral.
+  const nlpOnly = phraseScore === 0 && emojiScore === 0 && !hasFinancialContext;
+  if (nlpOnly && Math.abs(nlpScore) < 3) {
+    totalScore = 0;
+  }
+
+  // Question-form discount: "Didn't X buy stocks?" is asking, not declaring a position.
+  // If no strong WSB phrase anchors the sentiment, dampen the score heavily.
+  if (questionForm && Math.abs(phraseScore) < 3) {
+    totalScore *= 0.3;
+  }
 
   // 4. Conflict detection: when sarcasm is detected alongside strong directional
   // WSB phrases, the layers fundamentally disagree. Rather than blindly inverting

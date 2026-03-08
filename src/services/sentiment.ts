@@ -32,6 +32,10 @@ const WSB_PHRASE_SCORES: Array<{ pattern: RegExp; score: number }> = [
   { pattern: /\b(SPY|QQQ|ES)\s*\d{3,4}\s*p\b/i, score: -4 },
   { pattern: /\b0dte\s*call/i, score: 3 },
   { pattern: /\b0dte\s*put/i, score: -3 },
+  { pattern: /\bput\s*(weeklies|weekly|monthlies|monthly|leaps?|spreads?|debit)/i, score: -3 },
+  { pattern: /\bcall\s*(weeklies|weekly|monthlies|monthly|leaps?|spreads?|debit)/i, score: 3 },
+  { pattern: /\b(SPY|QQQ|ES|IWM)\s+puts?\b/i, score: -3 },
+  { pattern: /\b(SPY|QQQ|ES|IWM)\s+calls?\b/i, score: 3 },
 
   // Strongly bearish phrases
   { pattern: /\brug\s*pull/i, score: -4 },
@@ -112,7 +116,7 @@ const SARCASM_PATTERNS: RegExp[] = [
   /\bnothing\s+(bad\s+)?(can|could|will)\s+happen\b/i,
   /\b(it'?s|this\s+is)\s+just\s+a\s+(dip|correction|healthy\s+pullback)\b/i,
   /\byeah\s+right\b/i,
-  /\b\/s\b/,  // explicit sarcasm tag
+  /(?:^|[\s.,!?])\/s(?:$|[\s.,!?])/m,  // explicit sarcasm tag (standalone, not in URLs/words)
   /\bsure\s*,?\s*(?:jan|buddy|pal|thing)\b/i,
   /\bclown\s+market\b/i,
   /\bhow\s+could\s+this\s+(possibly\s+)?go\s+(wrong|tits\s*up)\b/i,

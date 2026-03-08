@@ -9,12 +9,14 @@ Runs on an Orange Pi Zero 2 and serves a dashboard on your local network.
 ## How It Works
 
 1. **Polls Reddit every 60 seconds** — fetches comments from the active WSB discussion thread (daily, overnight, or weekend) plus the top 10 hot posts and their comments
-2. **Analyzes sentiment** using a five-layer system:
+2. **Analyzes sentiment** using a seven-layer system:
    - `sentiment` NLP library for full-sentence analysis
-   - 40+ WSB-specific phrase patterns (context-aware, e.g. "my puts about to rip" = bearish)
+   - 50+ WSB-specific phrase patterns (context-aware, e.g. "my puts about to rip" = bearish)
    - Emoji scoring (rocket, bear, diamond hands, etc.)
-   - Sarcasm detection (16 patterns like "what could go wrong", "this is fine", "/s" — inverts sentiment)
+   - Sarcasm detection (16 patterns like "what could go wrong", "this is fine", "/s" — inverts weak signals, discards ambiguous ones)
    - Temporal awareness (10 past-tense patterns like "expired worthless" — discounts by 70%)
+   - Question-form detection (dampens questions that aren't directional opinions)
+   - Financial relevance gating (non-financial NLP-only comments discarded to avoid noise)
 3. **Tracks SPY prices** — fetches daily SPY data from Yahoo Finance, overlays on sentiment charts, and computes inverse strategy accuracy
 4. **Recommends the inverse** — if WSB is bullish, it says PUTS. If bearish, CALLS. With entertaining taglines.
 

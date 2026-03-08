@@ -666,6 +666,37 @@
         color: var(--blue);
         font-weight: 700;
       }
+      .info-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        border: 1px solid var(--text-muted);
+        color: var(--text-muted);
+        font-size: 0.6rem;
+        font-weight: 700;
+        cursor: pointer;
+        vertical-align: middle;
+        margin-left: 2px;
+        transition: border-color 0.2s, color 0.2s;
+      }
+      .info-icon:hover {
+        border-color: var(--blue);
+        color: var(--blue);
+      }
+      .info-tooltip {
+        background: var(--surface-raised);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin-top: 8px;
+        font-size: 0.74rem;
+        line-height: 1.5;
+        color: var(--text-muted);
+        text-align: left;
+      }
 
       .thread-badge {
         display: inline-flex;
@@ -1411,7 +1442,16 @@
               </div>
             </div>
             <div class="total-comments">
-              <span id="totalComments">0</span> comments analyzed · <span id="weightedScore">0</span> weighted score
+              <span id="totalComments">0</span> comments analyzed
+              <span class="info-icon" onclick="toggleTooltip('tipComments')" title="What is this?">?</span>
+              · <span id="weightedScore">0</span> weighted score
+              <span class="info-icon" onclick="toggleTooltip('tipWeighted')" title="What is this?">?</span>
+            </div>
+            <div class="info-tooltip" id="tipComments" style="display:none">
+              Total unique comments fetched from the active WSB discussion thread and top 10 hot posts. Each comment is analyzed for bullish, bearish, or neutral sentiment using NLP, WSB phrase patterns, emoji scoring, sarcasm detection, and financial relevance gating. Duplicates are filtered by the database.
+            </div>
+            <div class="info-tooltip" id="tipWeighted" style="display:none">
+              The weighted score reflects community conviction. Each comment's sentiment vote is multiplied by its Reddit upvotes &mdash; a comment with 50 upvotes counts 50x more than one with 1. This lets the community's own voting amplify strong signals and suppress noise. The bullish/bearish percentages and CALLS/PUTS/HOLD recommendation are driven by this weighted score, not the raw comment count.
             </div>
           </div>
 
@@ -2512,6 +2552,12 @@
         } catch (err) {
           console.warn("Cramer fetch failed:", err);
         }
+      }
+
+      function toggleTooltip(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.style.display = el.style.display === "none" ? "block" : "none";
       }
 
       function formatBytes(bytes) {

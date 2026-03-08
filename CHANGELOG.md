@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.4.0] - 2026-03-08
+
+Trade engine now uses time-decay weighted sentiment: comments closer to market open count more (1.0x within 2.5h, 0.7x 2.5–5.5h, 0.5x 5.5–17.5h, 0.3x beyond). Pulls raw comments from a 48-hour lookback window and combines upvote weight with decay multiplier for more accurate trade signals.
+
 ## [1.3.2] - 2026-03-08
 
 Hardened sentiment pipeline for trade accuracy: question-form comments dampened, non-financial NLP-only comments gated out, sarcasm + strong phrase conflicts resolve to neutral, layer disagreement halves confidence. Added missing market verbs (bounce, crater, recovery). Fixed /s sarcasm matching in URLs.

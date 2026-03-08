@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.7.1] - 2026-03-08
+
+- **Hotfix**: fixed `var`/`const` variable conflict in SPY verdict code that caused a JavaScript SyntaxError, resulting in a completely blank dashboard with no data or navigation
+
 ## [1.7.0] - 2026-03-08
 
 - **Trade performance tracking**: new Performance card on Trade Bot page with 8-stat grid (trades, win rate, total P&L, avg P&L, W/L record, best/worst trade, profit factor), round-trip trade history table, and P&L column in trade log

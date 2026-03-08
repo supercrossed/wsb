@@ -377,7 +377,25 @@ export function startScheduler(): void {
     { timezone: "America/New_York" },
   );
 
-  // Start the position monitor (checks option prices every 15s for exit logic)
+  // Trade bot: retry evaluation every 30 min if HOLD at open.
+  // If sentiment was borderline at 9:30, new comments may tip the signal.
+  // Stops at 11:00 AM — after that, 0DTE theta decay makes entry too risky.
+  cron.schedule(
+    "0,30 10 * * 1-5",
+    () => {
+      evaluateAndTrade();
+    },
+    { timezone: "America/New_York" },
+  );
+  cron.schedule(
+    "0 11 * * 1-5",
+    () => {
+      evaluateAndTrade();
+    },
+    { timezone: "America/New_York" },
+  );
+
+  // Start the position monitor (checks option prices every 1s for exit logic)
   startPositionMonitor();
 
   // Trade bot: close all 0DTE positions at 3:45 PM EST (15 min before close).

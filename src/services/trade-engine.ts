@@ -49,6 +49,10 @@ const MAX_OTM_PERCENT = 0.015;
 /** Interval for monitoring open positions (ms) */
 const MONITOR_INTERVAL_MS = 1_000; // check every 1 second
 
+/** Latest time to enter a 0DTE trade (11:00 AM EST = 660 minutes).
+ *  After this, theta decay makes entry too risky. */
+const ENTRY_CUTOFF_MINUTES = 660;
+
 /**
  * Tracks whether we've placed a trade today for each bot key.
  * Reset daily at market open.
@@ -319,23 +323,40 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
   });
 
   if (signal === "HOLD") {
-    logger.info("HOLD signal — no trade", {
+    // Check if we're past the entry cutoff — if so, skip the day entirely
+    const now = new Date();
+    const est = new Date(
+      now.toLocaleString("en-US", { timeZone: "America/New_York" }),
+    );
+    const currentMinutes = est.getHours() * 60 + est.getMinutes();
+    const pastCutoff = currentMinutes >= ENTRY_CUTOFF_MINUTES;
+
+    logger.info(pastCutoff ? "HOLD at cutoff — skipping day" : "HOLD signal — will retry", {
       bot: botLabel,
       bull: bullishPercent,
       bear: bearishPercent,
+      cutoffAt: "11:00 AM EST",
+      pastCutoff,
     });
+
     insertTradeLog({
       mode: cfg.mode,
-      action: "signal_hold",
+      action: pastCutoff ? "signal_hold_final" : "signal_hold_retry",
       symbol: "SPY",
       side: "buy",
       qty: 0,
       price: null,
       orderId: null,
       status: "cancelled",
-      message: `HOLD (bull=${bullishPercent}% bear=${bearishPercent}% time-decayed). No trade.`,
+      message: pastCutoff
+        ? `HOLD final (bull=${bullishPercent}% bear=${bearishPercent}%). Cutoff reached, no trade today.`
+        : `HOLD (bull=${bullishPercent}% bear=${bearishPercent}%). Will retry until 11:00 AM.`,
     });
-    tradedToday.set(botKey, true);
+
+    // Only mark tradedToday if past the cutoff — otherwise leave open for retry
+    if (pastCutoff) {
+      tradedToday.set(botKey, true);
+    }
     return;
   }
 

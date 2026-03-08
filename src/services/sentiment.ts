@@ -22,6 +22,7 @@ const WSB_PHRASE_SCORES: Array<{ pattern: RegExp; score: number }> = [
   { pattern: /\bload(ed|ing)?\s+(up\s+)?(on\s+)?calls/i, score: 4 },
   { pattern: /\bbought\s+calls/i, score: 3 },
   { pattern: /\bbuying\s+calls/i, score: 3 },
+  { pattern: /\bcalls?\s+on\s+\w/i, score: 3 },  // "calls on oil", "calls on TSLA"
   { pattern: /\bbuy(ing)?\s+(the\s+)?dip/i, score: 3 },
   { pattern: /\bdiamonds?\s*hands?/i, score: 3 },
   { pattern: /\bto\s+the\s+moon/i, score: 4 },
@@ -44,9 +45,10 @@ const WSB_PHRASE_SCORES: Array<{ pattern: RegExp; score: number }> = [
   { pattern: /\bbag\s*hold(ing|er)?/i, score: -3 },
   { pattern: /\bgap\s*down/i, score: -3 },
   { pattern: /\bsell(ing)?\s*off/i, score: -3 },
-  { pattern: /\bwe\s*(are\s+)?fuk/i, score: -4 },
-  { pattern: /\br\s*fuk/i, score: -4 },
+  { pattern: /\bwe\s*(are\s+|r\s+)?fuk/i, score: -4 },
+  // "r fuk" standalone removed — too broad, conflicts with "bers r fuk" (+4)
   { pattern: /\bbull(s)?\s*(are\s+)?(fuk|fked|fucked|trapped)/i, score: -4 },
+  { pattern: /\bbul(s)?\s*(are\s+|r\s+)?(fuk|fked|fucked|trapped)/i, score: -4 },
   { pattern: /\bbear\s*market/i, score: -3 },
 
   // Strongly bullish phrases
@@ -54,6 +56,18 @@ const WSB_PHRASE_SCORES: Array<{ pattern: RegExp; score: number }> = [
   // "free money" removed — ambiguous, often sarcastic
   { pattern: /\bgap\s*up/i, score: 3 },
   { pattern: /\bbear(s)?\s*(are\s+)?(fuk|fked|fucked|trapped)/i, score: 4 },
+  { pattern: /\bber(s)?\s*(are\s+|r\s+)?(fuk|fked|fucked|trapped)/i, score: 4 },
+  { pattern: /\bbol(s)?\s*(are\s+|r\s+)?(fuk|fked|fucked|trapped)/i, score: -4 },
+
+  // Mocking bears/bers = bullish; mocking bulls/bols = bearish
+  { pattern: /\b(dumb(ass)?|stupid|idiot|clown|regard(ed)?)\s*(ber|bear)(s)?\b/i, score: 3 },
+  { pattern: /\b(ber|bear)(s)?\s+(never\s+learn|in\s+shambles?|punching\s+air|crying|coping|seething|mad|salty)/i, score: 3 },
+  { pattern: /\b(dumb(ass)?|stupid|idiot|clown|regard(ed)?)\s*(bol|bul|bull)(s)?\b/i, score: -3 },
+  { pattern: /\b(bol|bul|bull)(s)?\s+(never\s+learn|in\s+shambles?|punching\s+air|crying|coping|seething|mad|salty|nightmare|getting\s+nightmare)/i, score: -3 },
+
+  // "us bols/bulls" = speaker identifies as bull = bullish
+  { pattern: /\bus\s+(bol|bul|bull|thundercock)(s)?\b/i, score: 3 },
+  { pattern: /\bus\s+(ber|bear)(s)?\b/i, score: -3 },
   // "all in" removed — directional but doesn't indicate bull/bear
   { pattern: /\bATH\b/, score: 3 },
 
@@ -85,7 +99,9 @@ const WSB_PHRASE_SCORES: Array<{ pattern: RegExp; score: number }> = [
   { pattern: /\bmargin\s*call(ed)?/i, score: -4 },
   { pattern: /\bcatch(ing)?\s+(a\s+)?falling\s+knife/i, score: -3 },
   { pattern: /\bknife\s*catch(ing|er)?/i, score: -2 },
-  { pattern: /\b(it('s|s)?\s+)?over\s+for\s+(us|bulls?|apes?)/i, score: -4 },
+  { pattern: /\b(it('s|s)?\s+)?over\s+for\s+(us|bulls?|bols?|apes?)/i, score: -4 },
+  { pattern: /\b(so\s+)?joever\b/i, score: -4 },
+  { pattern: /\b(i'?m|we('re|re)?)\s+(so\s+)?cooked\b/i, score: -4 },
   { pattern: /\btrap(ped)?\s+(bull|long)/i, score: -3 },
   { pattern: /\btheta\s*(gang|burn|decay|crush)/i, score: -2 },
   { pattern: /\bIV\s*crush/i, score: -2 },
@@ -258,6 +274,9 @@ const WSB_LEXICON: Record<string, number> = {
   "goated": 2,
   // "based" removed — means agreement, not bullish
 
+  // WSB slang — only non-ambiguous terms as lexicon words
+  "thundercock": 3, // aggressive bullish energy
+
   // Bearish
   "bearish": -3,
   "drill": -3,
@@ -274,7 +293,7 @@ const WSB_LEXICON: Record<string, number> = {
   "recession": -3,
   "rug": -2,
   "guh": -4,
-  "fuk": -2,
+  // "fuk" removed — ambiguous standalone; direction depends on who is fuk (handled by phrase patterns)
   "wrecked": -3,
   "rekt": -3,
   "bagholder": -3,
@@ -312,6 +331,10 @@ const WSB_LEXICON: Record<string, number> = {
   "implode": -3,
   "imploding": -3,
   "nothingburger": -1,
+
+  // WSB slang — only non-ambiguous terms as lexicon words
+  "cooked": -2, // done for / lost money
+  "joever": -3, // "it's over" doomer slang
 
   // Profanity as amplifiers (contextual — these shift existing sentiment)
   "fucking": 1, // amplifier, slight positive bias (excitement)
@@ -391,7 +414,7 @@ function isQuestion(text: string): boolean {
 }
 
 // Check if comment has any financial context (tickers, options terms, market references)
-const FINANCIAL_CONTEXT = /\b(SPY|QQQ|AAPL|TSLA|NVDA|AMD|AMZN|GOOG|META|MSFT|GME|AMC|PLTR|calls?|puts?|options?|shares?|stocks?|market|bull|bear|short|long|position|portfolio|trade|trading|hedge|fed|rate|yield|bonds?|earnings?|GDP|inflation|CPI|FOMC|JPow|tariff|recession|rally|dip|correction|ATH|ticker|\$[A-Z]{1,5})\b/i;
+const FINANCIAL_CONTEXT = /\b(SPY|QQQ|AAPL|TSLA|NVDA|AMD|AMZN|GOOG|META|MSFT|GME|AMC|PLTR|calls?|puts?|options?|shares?|stocks?|market|bull|bear|bols?|buls?|bers?|short|long|position|portfolio|trade|trading|hedge|fed|rate|yield|bonds?|earnings?|GDP|inflation|CPI|FOMC|JPow|tariff|recession|rally|dip|correction|ATH|ticker|\$[A-Z]{1,5})\b/i;
 
 export function analyzeSentiment(text: string): SentimentResult {
   // 1. General NLP score from the sentiment library (analyzes full sentence)

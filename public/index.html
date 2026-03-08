@@ -1601,14 +1601,9 @@
               <span class="hw-stat-value" id="hwCpuTemp">--</span>
             </div>
             <div class="hw-stat">
-              <span class="hw-stat-label">Net RX</span>
-              <span class="hw-stat-value" id="hwNetRx">--</span>
-              <span class="hw-stat-sub" id="hwNetRxTotal">--</span>
-            </div>
-            <div class="hw-stat">
-              <span class="hw-stat-label">Net TX</span>
-              <span class="hw-stat-value" id="hwNetTx">--</span>
-              <span class="hw-stat-sub" id="hwNetTxTotal">--</span>
+              <span class="hw-stat-label">Network</span>
+              <span class="hw-stat-value" id="hwNet">--</span>
+              <span class="hw-stat-sub" id="hwNetTotal">--</span>
             </div>
           </div>
           <div class="hw-uptime" id="hwUptime">--</div>
@@ -2802,18 +2797,12 @@
           document.getElementById("hwRamSub").textContent =
             formatMB(d.ram.used) + " / " + formatMB(d.ram.total);
 
-          document.getElementById("hwNetRx").textContent = formatBytes(
-            d.network.rxBytesPerSec,
-          );
-          document.getElementById("hwNetTx").textContent = formatBytes(
-            d.network.txBytesPerSec,
-          );
-
-          // Total data usage since boot
-          document.getElementById("hwNetRxTotal").textContent =
-            "Total: " + formatMB(d.network.totalRx);
-          document.getElementById("hwNetTxTotal").textContent =
-            "Total: " + formatMB(d.network.totalTx);
+          var netRate = d.network.rxBytesPerSec + d.network.txBytesPerSec;
+          document.getElementById("hwNet").textContent =
+            formatBytes(netRate);
+          var netTotal = d.network.totalRx + d.network.totalTx;
+          document.getElementById("hwNetTotal").textContent =
+            "Total: " + formatMB(netTotal);
 
           // CPU temperature (Linux only)
           if (d.cpuTemp !== null && d.cpuTemp !== undefined) {

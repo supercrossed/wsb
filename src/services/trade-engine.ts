@@ -22,7 +22,7 @@ import type { AlpacaCredentials, RiskLevel, TradeBotConfig } from "../types";
  * Risk level → percentage of portfolio equity to allocate per trade.
  */
 const RISK_ALLOCATION: Record<RiskLevel, number> = {
-  safe: 0.2, // 20% of portfolio
+  safe: 0.3, // 30% of portfolio
   degen: 0.5, // 50% of portfolio
   yolo: 0.7, // 70% of portfolio
 };

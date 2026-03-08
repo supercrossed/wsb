@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.7.0] - 2026-03-08
+
+- **Trade performance tracking**: new Performance card on Trade Bot page with 8-stat grid (trades, win rate, total P&L, avg P&L, W/L record, best/worst trade, profit factor), round-trip trade history table, and P&L column in trade log
+- **Equity timeline**: daily account equity snapshots captured at trade entry/exit and 4:01 PM EST, displayed as a Chart.js line chart on the Trade Bot page
+- **Info tooltip popups**: ? icons now show floating popup bubbles above the icon instead of expanding the card; click anywhere to dismiss
+- **SPY verdict fix**: when market is closed (weekends/after hours), the live verdict card now shows the last finalized historical outcome instead of computing a misleading comparison from stale weekend sentiment
+- **Combined network stats**: merged separate Net RX/TX into single "Network" stat showing combined bandwidth + total data usage since boot
+
 ## [1.6.0] - 2026-03-08
 
 - **About page**: new dashboard tab explaining how sentiment analysis works, the seven-layer pipeline, upvote weighting, inverse recommendations, and full trade bot mechanics (entry/exit logic, risk levels, option selection)

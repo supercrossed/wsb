@@ -2575,9 +2575,42 @@
           const q = spyData.quote;
           const s = sentData.sentiment;
 
-          // Live intraday verdict: compare current WSB sentiment vs SPY direction right now
-          // Always use raw bull/bear split — no HOLD gating on the scorecard
-          if (q && s && s.totalComments > 0) {
+          // When market is closed, show last finalized historical outcome
+          // instead of computing a misleading live verdict from stale/weekend data
+          var marketOpen = q && (q.marketState === "regular" || q.marketState === "pre" || q.marketState === "post");
+          var outcomes = scorecardData.recentOutcomes || [];
+
+          if (!marketOpen && outcomes.length > 0) {
+            // Show last finalized day's result
+            var last = outcomes[0];
+            var hash = "closed:" + last.date + ":" + (last.inverseCorrect === true ? "W" : last.inverseCorrect === false ? "L" : "H");
+            if (hash === lastVerdictHash) { /* skip streak update below */ }
+            else {
+              lastVerdictHash = hash;
+              if (last.inverseCorrect === true) {
+                verdictEl.textContent = "Last trading day: inverse was right.";
+                verdictEl.className = "spy-verdict-text inverse-right";
+                subEl.textContent =
+                  last.date + " — WSB: " + last.wsbSentiment +
+                  " → Inverse: " + (last.wsbSentiment === "bullish" ? "PUTS" : "CALLS") +
+                  " → SPY: " + (last.spyChange > 0 ? "up" : "down") + " " +
+                  ((last.spyChange / last.spyOpen) * 100).toFixed(2) + "% ✔";
+              } else if (last.inverseCorrect === false) {
+                verdictEl.textContent = "Last trading day: WSB got it right. Broken clock.";
+                verdictEl.className = "spy-verdict-text inverse-wrong";
+                subEl.textContent =
+                  last.date + " — WSB: " + last.wsbSentiment +
+                  " → Inverse: " + (last.wsbSentiment === "bullish" ? "PUTS" : "CALLS") +
+                  " → SPY: " + (last.spyChange > 0 ? "up" : "down") + " " +
+                  ((last.spyChange / last.spyOpen) * 100).toFixed(2) + "% ✘";
+              } else {
+                verdictEl.textContent = "Market closed. Waiting for next trading day.";
+                verdictEl.className = "spy-verdict-text no-data";
+                subEl.textContent = last.date + " — No clear signal (HOLD)";
+              }
+            }
+          } else if (q && s && s.totalComments > 0 && marketOpen) {
+            // Live intraday verdict
             const spyUp = q.change > 0;
             const spyDir = spyUp ? "up" : "down";
             const spyFlat = Math.abs(q.changePercent) < 0.05;
@@ -2585,10 +2618,8 @@
             const wsbSentiment = wsbBullish ? "bullish" : "bearish";
             const inverseRec = wsbBullish ? "PUTS" : "CALLS";
 
-            // Inverse correct when: WSB bullish + SPY down, or WSB bearish + SPY up
             const inverseCorrect = wsbBullish ? !spyUp : spyUp;
 
-            // Build hash from sentiment + SPY direction to avoid re-randomizing
             const hash =
               wsbSentiment + ":" + spyDir + ":" + (inverseCorrect ? "W" : "L");
             if (hash === lastVerdictHash) return;

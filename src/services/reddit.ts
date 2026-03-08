@@ -179,8 +179,13 @@ async function fetchMoreChildren(
 ): Promise<RedditListingChild[]> {
   const allComments: RedditListingChild[] = [];
   const batchSize = 100;
+  const maxBatches = 20; // Cap at 20 batches (2000 IDs) to avoid rate limit death spiral
+  let consecutiveFailures = 0;
 
-  for (let i = 0; i < moreIds.length; i += batchSize) {
+  const totalBatches = Math.ceil(moreIds.length / batchSize);
+  const batchLimit = Math.min(totalBatches, maxBatches);
+
+  for (let i = 0; i < batchLimit * batchSize && i < moreIds.length; i += batchSize) {
     const batch = moreIds.slice(i, i + batchSize);
     const ids = batch.join(",");
     const url = `${BASE_URL}/api/morechildren.json?api_type=json&link_id=t3_${linkId}&children=${ids}`;
@@ -192,13 +197,32 @@ async function fetchMoreChildren(
       if (res.json?.data?.things) {
         allComments.push(...res.json.data.things);
       }
+      consecutiveFailures = 0;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
+      consecutiveFailures++;
       logger.warn("Failed to fetch more children batch", {
         batch: i / batchSize,
         error: message,
       });
+
+      // Bail early if 3 consecutive failures (likely rate limited)
+      if (consecutiveFailures >= 3) {
+        logger.warn("Aborting morechildren expansion after 3 consecutive failures", {
+          fetched: allComments.length,
+          remaining: moreIds.length - i - batchSize,
+        });
+        break;
+      }
     }
+  }
+
+  if (totalBatches > maxBatches) {
+    logger.info("Capped morechildren expansion", {
+      totalIds: moreIds.length,
+      processedBatches: batchLimit,
+      skippedBatches: totalBatches - batchLimit,
+    });
   }
 
   return allComments;

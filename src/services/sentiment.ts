@@ -99,6 +99,45 @@ const WSB_PHRASE_SCORES: Array<{ pattern: RegExp; score: number }> = [
   { pattern: /\babout\s*to\s*(rip|fly|moon|pump|squeeze|print)/i, score: 3 },
 ];
 
+// --- Sarcasm detection patterns ---
+// These phrases indicate the comment is sarcastic/ironic.
+// When detected, the sentiment score gets inverted.
+const SARCASM_PATTERNS: RegExp[] = [
+  /\bwhat\s+could\s+(possibly\s+)?go\s+wrong\b/i,
+  /\bthis\s+is\s+fine\b/i,
+  /\bsurely\s+(this|the|it|that|we|they)\b/i,
+  /\btotally\s+(not|won'?t|isn'?t|can'?t)\b/i,
+  /\bdefinitely\s+(not|won'?t|isn'?t|can'?t)\b/i,
+  /\bI'?m\s+sure\s+(this|it|that)\s+(will|is)\s+(be\s+)?fine\b/i,
+  /\bnothing\s+(bad\s+)?(can|could|will)\s+happen\b/i,
+  /\b(it'?s|this\s+is)\s+just\s+a\s+(dip|correction|healthy\s+pullback)\b/i,
+  /\byeah\s+right\b/i,
+  /\b\/s\b/,  // explicit sarcasm tag
+  /\bsure\s*,?\s*(?:jan|buddy|pal|thing)\b/i,
+  /\bclown\s+market\b/i,
+  /\bhow\s+could\s+this\s+(possibly\s+)?go\s+(wrong|tits\s*up)\b/i,
+  /\bgreat\s+time\s+to\s+(buy|go\s+long)\s*[!.]*\s*\/{1}/i, // "great time to buy /s"
+  /\btrust\s+me\s+bro\b/i,
+  /\b(works?\s+)?every\s+time\s*[!.]*$/im, // "works every time" at end of comment
+  /\bprice\s+target\s*:?\s*\$?0\b/i,
+];
+
+// --- Temporal awareness patterns ---
+// Past-tense patterns indicate reporting on completed events, not forward-looking sentiment.
+// These get discounted (reduced weight) since they don't reflect current market outlook.
+const PAST_TENSE_PATTERNS: RegExp[] = [
+  /\b(bought|sold|closed|exited|dumped|lost|made|got)\s+(my\s+)?(calls?|puts?|position|shares?|contracts?)\b/i,
+  /\byesterday\s+(I|my|we)\b/i,
+  /\blast\s+(week|month|friday|monday|tuesday|wednesday|thursday)\b/i,
+  /\bshould'?ve\s+(bought|sold|held|dumped)\b/i,
+  /\bwish\s+I\s+(had|would'?ve)\b/i,
+  /\b(got\s+)?(rekt|wrecked|destroyed|wiped)\s+(yesterday|last|on\s+(monday|tuesday|wednesday|thursday|friday))\b/i,
+  /\bI\s+(was|got)\s+(up|down)\s+\d+%?\s+(yesterday|last)\b/i,
+  /\bended\s+(up|the\s+day)\s+(down|red|green)\b/i,
+  /\bexpired\s+worthless\b/i,
+  /\blearned\s+my\s+lesson\b/i,
+];
+
 // Emoji sentiment mappings (WSB context)
 const EMOJI_SCORES: Record<string, number> = {
   // Bullish emojis
@@ -311,6 +350,22 @@ function scoreWsbPhrases(text: string): number {
   return score;
 }
 
+function detectSarcasm(text: string): boolean {
+  for (const pattern of SARCASM_PATTERNS) {
+    pattern.lastIndex = 0;
+    if (pattern.test(text)) return true;
+  }
+  return false;
+}
+
+function detectPastTense(text: string): boolean {
+  for (const pattern of PAST_TENSE_PATTERNS) {
+    pattern.lastIndex = 0;
+    if (pattern.test(text)) return true;
+  }
+  return false;
+}
+
 export function analyzeSentiment(text: string): SentimentResult {
   // 1. General NLP score from the sentiment library (analyzes full sentence)
   const nlpResult = analyzer.analyze(text);
@@ -324,7 +379,21 @@ export function analyzeSentiment(text: string): SentimentResult {
 
   // Combine scores: phrase patterns get highest weight since they're most WSB-specific
   // NLP handles general language, emojis add color
-  const totalScore = nlpScore + (phraseScore * 1.5) + emojiScore;
+  let totalScore = nlpScore + (phraseScore * 1.5) + emojiScore;
+
+  // 4. Sarcasm detection: invert the score when sarcasm is detected.
+  // WSB sarcasm almost always means the opposite of what's said.
+  // e.g., "what could go wrong" with a bullish score → actually bearish.
+  if (detectSarcasm(text)) {
+    totalScore = -totalScore;
+  }
+
+  // 5. Temporal awareness: discount past-tense comments.
+  // Past-tense = reporting on what happened, not forward-looking sentiment.
+  // Reduce magnitude by 70% so they still count slightly but don't dominate.
+  if (detectPastTense(text)) {
+    totalScore *= 0.3;
+  }
 
   let sentiment: SentimentType;
   let confidence: number;

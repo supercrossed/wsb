@@ -3,6 +3,7 @@ export interface RedditComment {
   body: string;
   author: string;
   createdUtc: number;
+  score: number;
   threadId: string;
   threadType: ThreadType;
 }

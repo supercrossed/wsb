@@ -36,6 +36,7 @@ export function initDatabase(dbPath: string): Database.Database {
       body TEXT NOT NULL,
       author TEXT NOT NULL,
       created_utc INTEGER NOT NULL,
+      score INTEGER NOT NULL DEFAULT 1,
       thread_id TEXT NOT NULL,
       thread_type TEXT NOT NULL,
       sentiment TEXT NOT NULL,
@@ -186,6 +187,18 @@ export function initDatabase(dbPath: string): Database.Database {
     logger.info("Migrated tradebot_config: added trade_type column");
   }
 
+  // Migrate comments: add score column if missing
+  const commentColInfo = db
+    .prepare("PRAGMA table_info(comments)")
+    .all() as { name: string }[];
+  const commentColNames = new Set(commentColInfo.map((c) => c.name));
+  if (!commentColNames.has("score")) {
+    db.exec(
+      "ALTER TABLE comments ADD COLUMN score INTEGER NOT NULL DEFAULT 1",
+    );
+    logger.info("Migrated comments: added score column");
+  }
+
   logger.info("Database initialized", { path: dbPath });
   return db;
 }
@@ -217,6 +230,7 @@ export function saveFullComment(
   body: string,
   author: string,
   createdUtc: number,
+  score: number,
   threadId: string,
   threadType: ThreadType,
   sentiment: string,
@@ -224,14 +238,15 @@ export function saveFullComment(
   tickers: string[],
 ): boolean {
   const stmt = getDb().prepare(`
-    INSERT OR IGNORE INTO comments (id, body, author, created_utc, thread_id, thread_type, sentiment, confidence, tickers)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT OR IGNORE INTO comments (id, body, author, created_utc, score, thread_id, thread_type, sentiment, confidence, tickers)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const result = stmt.run(
     id,
     body,
     author,
     createdUtc,
+    score,
     threadId,
     threadType,
     sentiment,
@@ -346,25 +361,28 @@ export function getCommentCountSince(
   sinceUtc: number,
   threadType?: ThreadType,
 ): { bullish: number; bearish: number; neutral: number } {
+  // Upvote-weighted aggregation: each comment's vote is weighted by max(score, 1).
+  // A comment with 100 upvotes counts 100x more than a comment with 1.
+  // Floor score at 1 so downvoted comments still count once (prevents zero/negative weight).
   const query = threadType
-    ? "SELECT sentiment, COUNT(*) as count FROM comments WHERE created_utc >= ? AND thread_type = ? GROUP BY sentiment"
-    : "SELECT sentiment, COUNT(*) as count FROM comments WHERE created_utc >= ? GROUP BY sentiment";
+    ? "SELECT sentiment, SUM(MAX(score, 1)) as weight FROM comments WHERE created_utc >= ? AND thread_type = ? GROUP BY sentiment"
+    : "SELECT sentiment, SUM(MAX(score, 1)) as weight FROM comments WHERE created_utc >= ? GROUP BY sentiment";
 
   const rows = threadType
     ? (getDb().prepare(query).all(sinceUtc, threadType) as {
         sentiment: string;
-        count: number;
+        weight: number;
       }[])
     : (getDb().prepare(query).all(sinceUtc) as {
         sentiment: string;
-        count: number;
+        weight: number;
       }[]);
 
   const result = { bullish: 0, bearish: 0, neutral: 0 };
   for (const row of rows) {
-    if (row.sentiment === "bullish") result.bullish = row.count;
-    else if (row.sentiment === "bearish") result.bearish = row.count;
-    else result.neutral = row.count;
+    if (row.sentiment === "bullish") result.bullish = row.weight;
+    else if (row.sentiment === "bearish") result.bearish = row.weight;
+    else result.neutral = row.weight;
   }
   return result;
 }

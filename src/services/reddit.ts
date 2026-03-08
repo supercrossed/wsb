@@ -264,6 +264,7 @@ export async function fetchPostComments(
         body: c.body,
         author: c.author,
         createdUtc: c.created_utc,
+        score: c.score ?? 1,
         threadId: postId,
         threadType: "daily", // stored as daily for simplicity
       });
@@ -328,6 +329,7 @@ export async function fetchThreadComments(
         body: c.body,
         author: c.author,
         createdUtc: c.created_utc,
+        score: c.score ?? 1,
         threadId: thread.id,
         threadType,
       });

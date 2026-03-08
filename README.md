@@ -9,10 +9,12 @@ Runs on an Orange Pi Zero 2 and serves a dashboard on your local network.
 ## How It Works
 
 1. **Polls Reddit every 60 seconds** — fetches comments from the active WSB discussion thread (daily, overnight, or weekend) plus the top 10 hot posts and their comments
-2. **Analyzes sentiment** using a three-layer system:
+2. **Analyzes sentiment** using a five-layer system:
    - `sentiment` NLP library for full-sentence analysis
    - 40+ WSB-specific phrase patterns (context-aware, e.g. "my puts about to rip" = bearish)
    - Emoji scoring (rocket, bear, diamond hands, etc.)
+   - Sarcasm detection (16 patterns like "what could go wrong", "this is fine", "/s" — inverts sentiment)
+   - Temporal awareness (10 past-tense patterns like "expired worthless" — discounts by 70%)
 3. **Tracks SPY prices** — fetches daily SPY data from Yahoo Finance, overlays on sentiment charts, and computes inverse strategy accuracy
 4. **Recommends the inverse** — if WSB is bullish, it says PUTS. If bearish, CALLS. With entertaining taglines.
 
@@ -45,7 +47,7 @@ Runs on an Orange Pi Zero 2 and serves a dashboard on your local network.
 - **Database:** SQLite via better-sqlite3 (WAL mode)
 - **Web:** Express 5 serving a Chart.js dashboard
 - **Reddit:** Public JSON API (no auth required)
-- **Sentiment:** `sentiment` npm library + custom WSB lexicon + emoji scoring
+- **Sentiment:** `sentiment` npm library + custom WSB lexicon + emoji scoring + sarcasm detection + temporal awareness + upvote weighting
 - **Market Data:** Yahoo Finance public chart API (no auth required)
 
 ## Standalone Desktop App (Windows)
@@ -164,7 +166,7 @@ src/
     database.ts          # SQLite schema, queries, purge logic
     reddit.ts            # Reddit public API fetching
     scheduler.ts         # 60s poll loop, top posts, SPY backfill, sentiment aggregation
-    sentiment.ts         # NLP + emoji + WSB phrase analysis
+    sentiment.ts         # NLP + emoji + WSB phrase + sarcasm + temporal analysis
     spy.ts               # Yahoo Finance SPY price fetching
   types/index.ts         # TypeScript interfaces
   server.ts              # Express server
@@ -202,6 +204,10 @@ desktop/
 - **Accuracy tracking:** Each day's inverse recommendation is compared against actual SPY movement to compute a running accuracy score
 - **Dashboard overlay:** SPY close prices shown as a dashed yellow line on the 90-day history chart
 
+## Sentiment Weighting
+
+Comments are **upvote-weighted** — a comment with 50 upvotes counts 50x more than one with 1. This lets the community's own voting amplify signal and suppress noise. The dashboard shows both the raw comment count and the weighted score.
+
 ## Future
 
-- Alpaca-based 0DTE options trading bot
+- Multi-ticker sentiment tracking beyond SPY

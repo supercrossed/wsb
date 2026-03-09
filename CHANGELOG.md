@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.8.0] - 2026-03-09
+
+- **Greeks-aware option scoring**: trade engine now fetches real delta, gamma, theta, vega, and implied volatility from Alpaca snapshots API; contract selection uses actual delta instead of proximity heuristic
+- **Risk-level Greeks constraints**: Safe requires delta ≥ 0.20 and IV ≤ 30% (conservative, high-probability trades); Degen requires delta ≥ 0.05 and IV ≤ 50%; YOLO has no Greeks filters and searches the full ATM→3% OTM zone in one pass
+- **Extended strike search**: when no contracts in the ATM→1.5% OTM zone are affordable, the engine searches 1.5%→3% OTM as a fallback (enables small accounts to trade)
+- **No contract cap**: removed the arbitrary 100-contract limit; position size is now fully determined by risk level allocation (Safe 30%, Degen 50%, YOLO 70%)
+- **Greeks in trade logs**: entry log messages now include Δ, Γ, Θ, and IV for post-trade analysis
+
 ## [1.7.1] - 2026-03-08
 
 - **Hotfix**: fixed `var`/`const` variable conflict in SPY verdict code that caused a JavaScript SyntaxError, resulting in a completely blank dashboard with no data or navigation

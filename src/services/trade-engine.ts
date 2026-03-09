@@ -54,6 +54,24 @@ const TRAILING_STOP_RATIO = 0.5;
 const MAX_OTM_PERCENT = 0.015;
 const EXTENDED_OTM_PERCENT = 0.03;
 
+/**
+ * Risk-level-aware Greeks constraints.
+ * Safe: conservative — require meaningful delta, cap IV to avoid overpaying.
+ * Degen: moderate — lower delta floor, higher IV tolerance.
+ * YOLO: aggressive — search the full extended zone upfront, no Greeks filters.
+ */
+interface RiskGreeksConfig {
+  minDelta: number;        // minimum abs(delta) to consider a contract
+  maxIV: number;           // maximum implied volatility (e.g., 0.5 = 50%)
+  searchExtendedFirst: boolean; // if true, search ATM→3% OTM in one pass
+}
+
+const RISK_GREEKS: Record<RiskLevel, RiskGreeksConfig> = {
+  safe:  { minDelta: 0.20, maxIV: 0.30, searchExtendedFirst: false },
+  degen: { minDelta: 0.05, maxIV: 0.50, searchExtendedFirst: false },
+  yolo:  { minDelta: 0.00, maxIV: 1.00, searchExtendedFirst: true },
+};
+
 /** Interval for monitoring open positions (ms) */
 const MONITOR_INTERVAL_MS = 1_000; // check every 1 second
 
@@ -150,6 +168,9 @@ interface ScoredOption {
  * Uses real Greeks from Alpaca snapshots when available:
  *   Score = (contracts we can buy) × abs(delta)
  * Falls back to proximity heuristic if Greeks are unavailable.
+ *
+ * Greeks constraints (from risk level) filter out contracts that don't
+ * meet the minimum delta or exceed the max IV threshold.
  */
 async function scoreCandidates(
   creds: AlpacaCredentials,
@@ -158,6 +179,7 @@ async function scoreCandidates(
   spyPrice: number,
   budget: number,
   zoneMaxOtm: number,
+  greeksConfig: RiskGreeksConfig,
 ): Promise<ScoredOption | null> {
   let bestScore = -1;
   let bestOption: ScoredOption | null = null;
@@ -175,6 +197,12 @@ async function scoreCandidates(
     }
 
     if (price <= 0) continue;
+
+    // Apply Greeks filters when data is available
+    if (greeks) {
+      if (Math.abs(greeks.delta) < greeksConfig.minDelta) continue;
+      if (greeks.impliedVolatility > greeksConfig.maxIV) continue;
+    }
 
     const contractCost = price * 100;
     const numContracts = Math.floor(budget / contractCost);
@@ -230,6 +258,7 @@ async function selectOption(
   signal: "CALLS" | "PUTS",
   spyPrice: number,
   budget: number,
+  riskLevel: RiskLevel,
 ): Promise<{
   symbol: string;
   strikePrice: number;
@@ -239,6 +268,7 @@ async function selectOption(
 } | null> {
   const today = getTodayEST();
   const optionType = signal === "CALLS" ? "call" : "put";
+  const greeksConfig = RISK_GREEKS[riskLevel];
 
   const contracts = await getOptionsChain(creds, "SPY", today, optionType);
   if (contracts.length === 0) {
@@ -267,20 +297,28 @@ async function selectOption(
       );
     });
 
-  // Pass 1: Primary zone (ATM to 1.5% OTM)
-  const primaryCandidates = filterZone(0, MAX_OTM_PERCENT);
-  let bestOption = await scoreCandidates(creds, primaryCandidates, optionType, spyPrice, budget, MAX_OTM_PERCENT);
+  let bestOption: ScoredOption | null;
 
-  // Pass 2: Extended zone (1.5% to 3% OTM) — only if primary zone had no affordable contracts
-  if (!bestOption) {
-    const extendedCandidates = filterZone(MAX_OTM_PERCENT, EXTENDED_OTM_PERCENT);
-    if (extendedCandidates.length > 0) {
-      logger.info("Primary zone unaffordable, searching extended zone", {
-        budget,
-        spy: spyPrice,
-        extendedStrikes: extendedCandidates.length,
-      });
-      bestOption = await scoreCandidates(creds, extendedCandidates, optionType, spyPrice, budget, EXTENDED_OTM_PERCENT);
+  if (greeksConfig.searchExtendedFirst) {
+    // YOLO: search entire ATM → 3% OTM zone in one pass
+    const allCandidates = filterZone(0, EXTENDED_OTM_PERCENT);
+    bestOption = await scoreCandidates(creds, allCandidates, optionType, spyPrice, budget, EXTENDED_OTM_PERCENT, greeksConfig);
+  } else {
+    // Safe/Degen: primary zone first, extended as fallback
+    const primaryCandidates = filterZone(0, MAX_OTM_PERCENT);
+    bestOption = await scoreCandidates(creds, primaryCandidates, optionType, spyPrice, budget, MAX_OTM_PERCENT, greeksConfig);
+
+    if (!bestOption) {
+      const extendedCandidates = filterZone(MAX_OTM_PERCENT, EXTENDED_OTM_PERCENT);
+      if (extendedCandidates.length > 0) {
+        logger.info("Primary zone unaffordable, searching extended zone", {
+          budget,
+          spy: spyPrice,
+          riskLevel,
+          extendedStrikes: extendedCandidates.length,
+        });
+        bestOption = await scoreCandidates(creds, extendedCandidates, optionType, spyPrice, budget, EXTENDED_OTM_PERCENT, greeksConfig);
+      }
     }
   }
 
@@ -295,6 +333,7 @@ async function selectOption(
       price: bestOption.estimatedPrice,
       spy: spyPrice,
       budget,
+      riskLevel,
       otmPercent: otmPct + "%",
       zone: parseFloat(otmPct) <= MAX_OTM_PERCENT * 100 ? "primary" : "extended",
       score: bestOption.score.toFixed(1),
@@ -443,7 +482,7 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
   const budget = equity * RISK_ALLOCATION[cfg.riskLevel];
 
   // Select optimal option contract given our budget
-  const option = await selectOption(creds, signal, spyPrice, budget);
+  const option = await selectOption(creds, signal, spyPrice, budget, cfg.riskLevel);
   if (!option) {
     insertTradeLog({
       mode: cfg.mode,

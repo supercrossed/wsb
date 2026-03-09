@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.8.1] - 2026-03-09
+
+Fix trade bot not retrying after failed option lookup. Delay initial trade to 9:45 AM for quote availability. Add diagnostic logging to option selection and persistent file logging.
+
+
 ## [1.8.0] - 2026-03-09
 
 - **Greeks-aware option scoring**: trade engine now fetches real delta, gamma, theta, vega, and implied volatility from Alpaca snapshots API; contract selection uses actual delta instead of proximity heuristic

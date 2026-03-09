@@ -3,7 +3,7 @@ HOW TO CREATE A NEW RELEASE
 
 Tell Claude to run the release script with a version number and changelog:
 
-  bash scripts/release.sh 1.1.0 "Added ticker heatmap, fixed weekend thread detection"
+  bash scripts/release.sh 'x.x.x' ***VERSION NUMBER BASED ON VERSION FORMAT AND MOST RECENT RLEASE*** "Added ticker heatmap, fixed weekend thread detection" ***Quick changelog description***
 
 This will automatically:
   - Build the Windows exe based on the newest project code

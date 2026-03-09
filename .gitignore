@@ -2,6 +2,7 @@ node_modules/
 dist/
 data/
 desktop/dist/
+desktop/*.zip
 .env
 *.db
 *.sqlite

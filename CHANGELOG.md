@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.9.0] - 2026-03-09
+
+- Dashboard recommendation card now shows the trade bot's actual 48h time-decayed signal instead of the current thread's sentiment
+- New /api/sentiment/tradebot endpoint for real-time trade bot signal
+- Steeper time-decay: 17.5h+ comments now 0.1x weight (was 0.3x), recent sentiment dominates
+- Trade bot retries on failed option lookup instead of giving up for the day
+- Initial trade delayed to 9:45 AM EST for quote availability after market open
+- Diagnostic logging for option selection (chain size, rejection reasons)
+- Persistent file logging to logs/wsb.log
+- Disclaimers on sentiment and recommendation cards explaining data sources
+
+
 ## [1.8.1] - 2026-03-09
 
 Fix trade bot not retrying after failed option lookup. Delay initial trade to 9:45 AM for quote availability. Add diagnostic logging to option selection and persistent file logging.

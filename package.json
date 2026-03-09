@@ -1,6 +1,6 @@
 {
   "name": "wsb",
-  "version": "1.8.1",
+  "version": "1.9.0",
   "description": "WSB Inverse Sentiment Tracker",
   "main": "dist/index.js",
   "scripts": {

@@ -371,7 +371,7 @@ export function startScheduler(): void {
     { timezone: "America/New_York" },
   );
   cron.schedule(
-    "30 9 * * 1-5",
+    "45 9 * * 1-5",
     () => {
       evaluateAndTrade();
     },
@@ -379,10 +379,10 @@ export function startScheduler(): void {
   );
 
   // Trade bot: retry evaluation every 30 min if HOLD at open.
-  // If sentiment was borderline at 9:30, new comments may tip the signal.
+  // If sentiment was borderline at 9:45, new comments may tip the signal.
   // Stops at 11:00 AM — after that, 0DTE theta decay makes entry too risky.
   cron.schedule(
-    "0,30 10 * * 1-5",
+    "15,45 10 * * 1-5",
     () => {
       evaluateAndTrade();
     },

@@ -184,6 +184,12 @@ async function scoreCandidates(
   let bestScore = -1;
   let bestOption: ScoredOption | null = null;
 
+  let skippedNoPrice = 0;
+  let skippedDelta = 0;
+  let skippedIV = 0;
+  let skippedCost = 0;
+  let skippedSnap = 0;
+
   for (const c of candidates) {
     let price: number;
     let greeks: OptionGreeks | null = null;
@@ -194,19 +200,20 @@ async function scoreCandidates(
       greeks = snap.greeks;
     } catch {
       price = c.closePrice ?? 0;
+      skippedSnap++;
     }
 
-    if (price <= 0) continue;
+    if (price <= 0) { skippedNoPrice++; continue; }
 
     // Apply Greeks filters when data is available
     if (greeks) {
-      if (Math.abs(greeks.delta) < greeksConfig.minDelta) continue;
-      if (greeks.impliedVolatility > greeksConfig.maxIV) continue;
+      if (Math.abs(greeks.delta) < greeksConfig.minDelta) { skippedDelta++; continue; }
+      if (greeks.impliedVolatility > greeksConfig.maxIV) { skippedIV++; continue; }
     }
 
     const contractCost = price * 100;
     const numContracts = Math.floor(budget / contractCost);
-    if (numContracts < 1) continue;
+    if (numContracts < 1) { skippedCost++; continue; }
 
     // Use real delta if available; fall back to proximity heuristic
     let sensitivity: number;
@@ -238,6 +245,17 @@ async function scoreCandidates(
       };
     }
   }
+
+  logger.info("Score candidates result", {
+    candidates: candidates.length,
+    skippedNoPrice,
+    skippedSnapshot: skippedSnap,
+    skippedDelta,
+    skippedIV,
+    skippedCost,
+    selected: bestOption ? bestOption.symbol : "none",
+    bestScore: bestOption ? bestScore : 0,
+  });
 
   return bestOption;
 }
@@ -271,6 +289,13 @@ async function selectOption(
   const greeksConfig = RISK_GREEKS[riskLevel];
 
   const contracts = await getOptionsChain(creds, "SPY", today, optionType);
+  logger.info("Option chain fetched", {
+    date: today,
+    type: optionType,
+    totalContracts: contracts.length,
+    strikes: contracts.slice(0, 5).map((c) => c.strikePrice),
+    spy: spyPrice,
+  });
   if (contracts.length === 0) {
     logger.warn("No 0DTE contracts found", { date: today, type: optionType });
     return null;
@@ -278,13 +303,16 @@ async function selectOption(
 
   const tradable = contracts.filter((c) => c.tradable);
   if (tradable.length === 0) {
-    logger.warn("No tradable 0DTE options");
+    logger.warn("No tradable 0DTE options", {
+      total: contracts.length,
+      statuses: contracts.map((c) => c.status),
+    });
     return null;
   }
 
   // Helper: filter tradable contracts within an OTM range
-  const filterZone = (minOtm: number, maxOtm: number) =>
-    tradable.filter((c) => {
+  const filterZone = (minOtm: number, maxOtm: number) => {
+    const zoneContracts = tradable.filter((c) => {
       if (optionType === "call") {
         return (
           c.strikePrice >= spyPrice * (1 + minOtm) &&
@@ -296,6 +324,19 @@ async function selectOption(
         c.strikePrice >= spyPrice * (1 - maxOtm)
       );
     });
+    logger.info("Strike zone filtered", {
+      type: optionType,
+      spy: spyPrice,
+      minOtm,
+      maxOtm,
+      rangeMin: spyPrice * (1 - maxOtm),
+      rangeMax: spyPrice * (1 + maxOtm),
+      tradable: tradable.length,
+      inZone: zoneContracts.length,
+      zoneStrikes: zoneContracts.map((c) => c.strikePrice),
+    });
+    return zoneContracts;
+  };
 
   let bestOption: ScoredOption | null;
 
@@ -495,7 +536,7 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
       status: "error",
       message: `${signal} but no 0DTE option found (SPY $${spyPrice.toFixed(2)}, budget $${budget.toFixed(2)})`,
     });
-    tradedToday.set(botKey, true);
+    // Do NOT mark as traded — allow retry at next scheduled evaluation
     return;
   }
 

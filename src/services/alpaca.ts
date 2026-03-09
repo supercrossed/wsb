@@ -249,6 +249,75 @@ export async function getOptionQuote(
   };
 }
 
+export interface OptionGreeks {
+  delta: number;
+  gamma: number;
+  theta: number;
+  vega: number;
+  impliedVolatility: number;
+}
+
+export interface OptionSnapshot {
+  askPrice: number;
+  bidPrice: number;
+  midPrice: number;
+  greeks: OptionGreeks | null;
+}
+
+/**
+ * Fetches the latest snapshot for an options contract (quote + Greeks).
+ * Uses the snapshots endpoint which returns trade, quote, and Greeks in one call.
+ */
+export async function getOptionSnapshot(
+  creds: AlpacaCredentials,
+  optionSymbol: string,
+): Promise<OptionSnapshot> {
+  const url = `https://data.alpaca.markets/v1beta1/options/snapshots?symbols=${encodeURIComponent(optionSymbol)}&feed=indicative`;
+  const res = await fetch(url, { headers: getHeaders(creds) });
+
+  if (!res.ok) {
+    const body = await res.text();
+    logger.error("Alpaca getOptionSnapshot failed", {
+      status: res.status,
+      body,
+    });
+    throw new Error(`Alpaca option snapshot error ${res.status}: ${body}`);
+  }
+
+  const data = (await res.json()) as {
+    snapshots: Record<string, {
+      latestQuote?: { ap: number; bp: number };
+      greeks?: { delta: number; gamma: number; theta: number; vega: number; rho: number };
+      impliedVolatility?: number;
+    }>;
+  };
+  const snap = data.snapshots[optionSymbol];
+  if (!snap) {
+    throw new Error(`No snapshot data for ${optionSymbol}`);
+  }
+
+  const ask = snap.latestQuote?.ap ?? 0;
+  const bid = snap.latestQuote?.bp ?? 0;
+
+  let greeks: OptionGreeks | null = null;
+  if (snap.greeks) {
+    greeks = {
+      delta: snap.greeks.delta,
+      gamma: snap.greeks.gamma,
+      theta: snap.greeks.theta,
+      vega: snap.greeks.vega,
+      impliedVolatility: snap.impliedVolatility ?? 0,
+    };
+  }
+
+  return {
+    askPrice: ask,
+    bidPrice: bid,
+    midPrice: ask > 0 && bid > 0 ? (ask + bid) / 2 : ask || bid,
+    greeks,
+  };
+}
+
 /**
  * Places an options order on Alpaca. Uses limit order at mid-price for better fills.
  */

@@ -3,17 +3,18 @@ import {
   getAccount,
   getOptionsChain,
   getOptionQuote,
+  getOptionSnapshot,
   placeOptionsOrder,
   closePosition,
   getPositions,
 } from "./alpaca";
+import type { OptionGreeks } from "./alpaca";
 import {
   getAllTradeBotConfigs,
   insertTradeLog,
   getTimeDecayedSentiment,
   insertTradeRound,
   closeTradeRound,
-  getOpenTradeRound,
   insertEquitySnapshot,
 } from "./database";
 import { getInverseRecommendation } from "./sentiment";
@@ -135,10 +136,20 @@ function isNearClose(): boolean {
   return timeMinutes >= 945 && timeMinutes < 960; // 3:45 PM - 4:00 PM
 }
 
+interface ScoredOption {
+  symbol: string;
+  strikePrice: number;
+  type: "call" | "put";
+  estimatedPrice: number;
+  score: number;
+  greeks: OptionGreeks | null;
+}
+
 /**
  * Scores candidates from a given OTM zone and returns the best option.
- * Score = (contracts we can buy) × (proximity factor).
- * Proximity is 1.0 at ATM, linearly decays to 0.3 at the zone's outer edge.
+ * Uses real Greeks from Alpaca snapshots when available:
+ *   Score = (contracts we can buy) × abs(delta)
+ * Falls back to proximity heuristic if Greeks are unavailable.
  */
 async function scoreCandidates(
   creds: AlpacaCredentials,
@@ -147,15 +158,18 @@ async function scoreCandidates(
   spyPrice: number,
   budget: number,
   zoneMaxOtm: number,
-): Promise<{ symbol: string; strikePrice: number; type: "call" | "put"; estimatedPrice: number; score: number } | null> {
+): Promise<ScoredOption | null> {
   let bestScore = -1;
-  let bestOption: { symbol: string; strikePrice: number; type: "call" | "put"; estimatedPrice: number; score: number } | null = null;
+  let bestOption: ScoredOption | null = null;
 
   for (const c of candidates) {
     let price: number;
+    let greeks: OptionGreeks | null = null;
+
     try {
-      const quote = await getOptionQuote(creds, c.symbol);
-      price = quote.midPrice > 0 ? quote.midPrice : quote.askPrice;
+      const snap = await getOptionSnapshot(creds, c.symbol);
+      price = snap.midPrice > 0 ? snap.midPrice : snap.askPrice;
+      greeks = snap.greeks;
     } catch {
       price = c.closePrice ?? 0;
     }
@@ -166,16 +180,23 @@ async function scoreCandidates(
     const numContracts = Math.floor(budget / contractCost);
     if (numContracts < 1) continue;
 
-    const otmDistance =
-      optionType === "call"
-        ? (c.strikePrice - spyPrice) / spyPrice
-        : (spyPrice - c.strikePrice) / spyPrice;
-    const proximity = Math.max(
-      0.3,
-      1.0 - (otmDistance / zoneMaxOtm) * 0.7,
-    );
+    // Use real delta if available; fall back to proximity heuristic
+    let sensitivity: number;
+    if (greeks && Math.abs(greeks.delta) > 0) {
+      sensitivity = Math.abs(greeks.delta);
+    } else {
+      const otmDistance =
+        optionType === "call"
+          ? (c.strikePrice - spyPrice) / spyPrice
+          : (spyPrice - c.strikePrice) / spyPrice;
+      sensitivity = Math.max(
+        0.3,
+        1.0 - (otmDistance / zoneMaxOtm) * 0.7,
+      );
+    }
 
-    const score = numContracts * proximity;
+    // Score = contracts × delta — maximizes total dollar exposure per $1 SPY move
+    const score = numContracts * sensitivity;
 
     if (score > bestScore) {
       bestScore = score;
@@ -185,6 +206,7 @@ async function scoreCandidates(
         type: optionType,
         estimatedPrice: price,
         score,
+        greeks,
       };
     }
   }
@@ -213,6 +235,7 @@ async function selectOption(
   strikePrice: number;
   type: "call" | "put";
   estimatedPrice: number;
+  greeks: OptionGreeks | null;
 } | null> {
   const today = getTodayEST();
   const optionType = signal === "CALLS" ? "call" : "put";
@@ -265,6 +288,7 @@ async function selectOption(
     const otmPct = optionType === "call"
       ? ((bestOption.strikePrice - spyPrice) / spyPrice * 100).toFixed(1)
       : ((spyPrice - bestOption.strikePrice) / spyPrice * 100).toFixed(1);
+    const g = bestOption.greeks;
     logger.info("Option selected", {
       symbol: bestOption.symbol,
       strike: bestOption.strikePrice,
@@ -274,6 +298,12 @@ async function selectOption(
       otmPercent: otmPct + "%",
       zone: parseFloat(otmPct) <= MAX_OTM_PERCENT * 100 ? "primary" : "extended",
       score: bestOption.score.toFixed(1),
+      ...(g ? {
+        delta: g.delta.toFixed(4),
+        gamma: g.gamma.toFixed(4),
+        theta: g.theta.toFixed(4),
+        iv: (g.impliedVolatility * 100).toFixed(1) + "%",
+      } : {}),
     });
   }
 
@@ -459,6 +489,11 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
       option.estimatedPrice,
     );
 
+    const g = option.greeks;
+    const greeksStr = g
+      ? ` | Δ=${g.delta.toFixed(3)} Γ=${g.gamma.toFixed(4)} Θ=${g.theta.toFixed(3)} IV=${(g.impliedVolatility * 100).toFixed(1)}%`
+      : "";
+
     logger.info("Trade placed", {
       bot: botLabel,
       signal,
@@ -468,6 +503,13 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
       qty,
       price: option.estimatedPrice,
       orderId: order.id,
+      ...(g ? {
+        delta: g.delta.toFixed(4),
+        gamma: g.gamma.toFixed(4),
+        theta: g.theta.toFixed(4),
+        vega: g.vega.toFixed(4),
+        iv: (g.impliedVolatility * 100).toFixed(1) + "%",
+      } : {}),
     });
 
     const entryLogId = insertTradeLog({
@@ -479,7 +521,7 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
       price: option.estimatedPrice,
       orderId: order.id,
       status: order.status === "filled" ? "filled" : "submitted",
-      message: `${signal} ${qty}x ${option.type.toUpperCase()} SPY $${option.strikePrice} @ $${option.estimatedPrice.toFixed(2)} [${cfg.riskLevel}]`,
+      message: `${signal} ${qty}x ${option.type.toUpperCase()} SPY $${option.strikePrice} @ $${option.estimatedPrice.toFixed(2)} [${cfg.riskLevel}]${greeksStr}`,
     });
 
     const roundId = insertTradeRound({

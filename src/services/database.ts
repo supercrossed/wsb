@@ -476,16 +476,17 @@ export function getTimeDecayedSentiment(
     const ageHours = (nowUtc - row.created_utc) / 3600;
     const upvoteWeight = Math.max(row.score, 1);
 
-    // Time-decay multiplier: fresher comments count more
+    // Time-decay multiplier: fresher comments count much more.
+    // Steep decay ensures recent sentiment dominates the signal.
     let decayMultiplier: number;
     if (ageHours <= 2.5) {
       decayMultiplier = 1.0; // Last 2.5h (daily thread morning)
     } else if (ageHours <= 5.5) {
-      decayMultiplier = 0.7; // 2.5-5.5h ago (overnight/early morning)
+      decayMultiplier = 0.6; // 2.5-5.5h ago (overnight/early morning)
     } else if (ageHours <= 17.5) {
-      decayMultiplier = 0.5; // 5.5-17.5h ago (previous evening / late night)
+      decayMultiplier = 0.3; // 5.5-17.5h ago (previous evening / late night)
     } else {
-      decayMultiplier = 0.3; // 17.5h+ ago (weekend / old)
+      decayMultiplier = 0.1; // 17.5h+ ago (weekend / old — near-zero influence)
     }
 
     const weight = upvoteWeight * decayMultiplier;

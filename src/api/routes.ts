@@ -8,6 +8,7 @@ import {
   getSentimentHistory,
   getHistoricalComparison,
   getCommentCountSince,
+  getTimeDecayedSentiment,
   getTopPosts,
   getRecentOutcomes,
   getCramerPicks,
@@ -66,6 +67,48 @@ router.get("/api/sentiment/today", (_req: Request, res: Response) => {
     date: tradingDate,
     threadType,
     sentiment: sentiment ?? null,
+  });
+});
+
+/**
+ * GET /api/sentiment/tradebot
+ * Returns the trade bot's 48h time-decayed sentiment (what the bot actually uses).
+ * Bull/bear ratio excludes neutral; includes spread and signal.
+ */
+router.get("/api/sentiment/tradebot", (_req: Request, res: Response) => {
+  const lookbackUtc = Math.floor(Date.now() / 1000) - 48 * 3600;
+  const counts = getTimeDecayedSentiment(lookbackUtc);
+  const directional = counts.bullish + counts.bearish;
+
+  if (directional === 0) {
+    res.json({
+      bullishPercent: 0,
+      bearishPercent: 0,
+      spread: 0,
+      signal: "HOLD",
+      rawTotal: counts.rawTotal,
+    });
+    return;
+  }
+
+  const bullRatio = Math.round((counts.bullish / directional) * 10000) / 100;
+  const bearRatio = Math.round((counts.bearish / directional) * 10000) / 100;
+  const spread = Math.round(Math.abs(bullRatio - bearRatio) * 100) / 100;
+
+  // getInverseRecommendation recalculates bull/bear ratio internally,
+  // so pass percentages of total (including neutral) as it expects.
+  const total = directional + counts.neutral;
+  const signal = getInverseRecommendation(
+    Math.round((counts.bullish / total) * 10000) / 100,
+    Math.round((counts.bearish / total) * 10000) / 100,
+  );
+
+  res.json({
+    bullishPercent: bullRatio,
+    bearishPercent: bearRatio,
+    spread,
+    signal,
+    rawTotal: counts.rawTotal,
   });
 });
 

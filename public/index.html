@@ -1594,7 +1594,7 @@
               <span id="totalComments">0</span> comments analyzed
               <span class="info-wrap">
                 <span class="info-icon" onclick="toggleTooltip(event,'tipComments')">?</span>
-                <div class="info-tooltip" id="tipComments">Total unique comments fetched from the active WSB discussion thread and top 10 hot posts. Each comment is analyzed for bullish, bearish, or neutral sentiment using NLP, WSB phrase patterns, emoji scoring, sarcasm detection, and financial relevance gating.</div>
+                <div class="info-tooltip" id="tipComments">Sentiment from the current active WSB thread. During thread transitions, counts may include late comments on the prior thread. This reflects the current thread only &mdash; the trade bot uses a separate 48-hour weighted window.</div>
               </span>
               · <span id="weightedScore">0</span> weighted score
               <span class="info-wrap">
@@ -1606,11 +1606,15 @@
 
           <!-- Recommendation Card -->
           <div class="card recommendation">
-            <div class="rec-label">Inverse Recommendation</div>
+            <div class="rec-label">Trade Bot Signal</div>
             <div class="rec-tagline hold" id="recTagline">&nbsp;</div>
             <div class="action hold" id="recommendation">--</div>
             <div class="rec-explanation" id="recExplanation">
               Waiting for data...
+            </div>
+            <div class="rec-tradebot-info" id="tradebotInfo" style="font-size:0.7rem;color:#888;margin-top:6px;text-align:center;"></div>
+            <div class="rec-disclaimer" style="font-size:0.6rem;color:#666;margin-top:8px;text-align:center;line-height:1.4;">
+              Based on 48-hour time-decayed weighted sentiment. Recent comments count more. Requires &gt;5% bull/bear spread to trade.
             </div>
             <div class="rec-scorecard" id="recScorecard">
               <canvas id="scorecardPie" width="100" height="100"></canvas>
@@ -2046,8 +2050,12 @@
 
       async function fetchSentiment() {
         try {
-          const res = await fetch("/api/sentiment/today");
+          const [res, tbRes] = await Promise.all([
+            fetch("/api/sentiment/today"),
+            fetch("/api/sentiment/tradebot"),
+          ]);
           const data = await res.json();
+          const tb = await tbRes.json();
 
           document.getElementById("statusDot").style.background = "#00ff87";
           document.getElementById("statusText").textContent = "LIVE";
@@ -2068,6 +2076,7 @@
               "rec-tagline hold";
             document.getElementById("recExplanation").textContent =
               "Collecting data from WSB...";
+            document.getElementById("tradebotInfo").textContent = "";
             document.getElementById("sentimentFill").style.width = "50%";
             document.getElementById("barBullLabel").textContent = "0%";
             document.getElementById("barBearLabel").textContent = "0%";
@@ -2105,7 +2114,8 @@
           document.getElementById("barBearLabel").textContent =
             bearPct.toFixed(1) + "%";
 
-          const rec = s.recommendation;
+          // Recommendation card uses trade bot's 48h time-decayed signal
+          const rec = tb.signal || s.recommendation;
           const recEl = document.getElementById("recommendation");
           recEl.textContent = rec;
           recEl.className = "action " + rec.toLowerCase();
@@ -2145,6 +2155,13 @@
           };
           document.getElementById("recExplanation").textContent =
             explanations[rec];
+
+          // Show trade bot details
+          document.getElementById("tradebotInfo").textContent =
+            "48h weighted: " + tb.bullishPercent.toFixed(1) + "% bull / " +
+            tb.bearishPercent.toFixed(1) + "% bear \u2014 spread: " +
+            tb.spread.toFixed(1) + "% \u2014 " +
+            tb.rawTotal.toLocaleString() + " comments";
 
           updatePieChart(bullPct, bearPct);
           document.getElementById("lastUpdated").textContent =

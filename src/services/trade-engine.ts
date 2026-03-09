@@ -45,10 +45,13 @@ const STOP_LOSS_PCT = 0.2;
 const TRAILING_STOP_RATIO = 0.5;
 
 /**
- * Strike selection zone: consider contracts from ATM out to 1.5% OTM.
- * Within this zone, pick the strike that maximizes contracts × delta-like score.
+ * Strike selection zones:
+ * - Primary: ATM to 1.5% OTM (best delta, highest probability of profit)
+ * - Extended: 1.5% to 3% OTM (used when primary zone is unaffordable)
+ * Within each zone, pick the strike that maximizes contracts × proximity score.
  */
 const MAX_OTM_PERCENT = 0.015;
+const EXTENDED_OTM_PERCENT = 0.03;
 
 /** Interval for monitoring open positions (ms) */
 const MONITOR_INTERVAL_MS = 1_000; // check every 1 second
@@ -133,18 +136,72 @@ function isNearClose(): boolean {
 }
 
 /**
+ * Scores candidates from a given OTM zone and returns the best option.
+ * Score = (contracts we can buy) × (proximity factor).
+ * Proximity is 1.0 at ATM, linearly decays to 0.3 at the zone's outer edge.
+ */
+async function scoreCandidates(
+  creds: AlpacaCredentials,
+  candidates: { symbol: string; strikePrice: number; type: "call" | "put"; tradable: boolean; closePrice: number | null }[],
+  optionType: "call" | "put",
+  spyPrice: number,
+  budget: number,
+  zoneMaxOtm: number,
+): Promise<{ symbol: string; strikePrice: number; type: "call" | "put"; estimatedPrice: number; score: number } | null> {
+  let bestScore = -1;
+  let bestOption: { symbol: string; strikePrice: number; type: "call" | "put"; estimatedPrice: number; score: number } | null = null;
+
+  for (const c of candidates) {
+    let price: number;
+    try {
+      const quote = await getOptionQuote(creds, c.symbol);
+      price = quote.midPrice > 0 ? quote.midPrice : quote.askPrice;
+    } catch {
+      price = c.closePrice ?? 0;
+    }
+
+    if (price <= 0) continue;
+
+    const contractCost = price * 100;
+    const numContracts = Math.floor(budget / contractCost);
+    if (numContracts < 1) continue;
+
+    const otmDistance =
+      optionType === "call"
+        ? (c.strikePrice - spyPrice) / spyPrice
+        : (spyPrice - c.strikePrice) / spyPrice;
+    const proximity = Math.max(
+      0.3,
+      1.0 - (otmDistance / zoneMaxOtm) * 0.7,
+    );
+
+    const score = numContracts * proximity;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestOption = {
+        symbol: c.symbol,
+        strikePrice: c.strikePrice,
+        type: optionType,
+        estimatedPrice: price,
+        score,
+      };
+    }
+  }
+
+  return bestOption;
+}
+
+/**
  * Selects the optimal 0DTE option contract to maximize potential wins.
  *
- * Strategy: given our budget, we want the contract that gives us the best
- * leverage while still having a realistic chance of going ITM.
+ * Two-pass strategy:
+ * 1. Primary zone (ATM → 1.5% OTM): best delta, highest probability of profit.
+ * 2. Extended zone (1.5% → 3% OTM): used only when nothing in the primary zone
+ *    is affordable. Lower delta but still moves meaningfully on 1%+ SPY swings.
  *
- * For each candidate contract in the ATM → 1.5% OTM zone:
- *   - Score = (contracts we can buy) × (proximity factor)
- *   - Proximity factor = 1.0 at ATM, decays as strike moves OTM
- *   - This naturally balances: cheaper OTM = more contracts (leverage)
- *     vs closer to ATM = higher probability of profit
- *
- * The result: slightly OTM contracts that give us meaningful size.
+ * Within each zone, score = (contracts we can buy) × (proximity factor).
+ * This balances cheaper OTM (more leverage) vs closer to ATM (higher delta).
  */
 async function selectOption(
   creds: AlpacaCredentials,
@@ -172,97 +229,51 @@ async function selectOption(
     return null;
   }
 
-  // Filter to strikes within our selection zone (ATM to 1.5% OTM)
-  const candidates = tradable.filter((c) => {
-    if (optionType === "call") {
-      // Calls: strike at or above current price, but not too far
+  // Helper: filter tradable contracts within an OTM range
+  const filterZone = (minOtm: number, maxOtm: number) =>
+    tradable.filter((c) => {
+      if (optionType === "call") {
+        return (
+          c.strikePrice >= spyPrice * (1 + minOtm) &&
+          c.strikePrice <= spyPrice * (1 + maxOtm)
+        );
+      }
       return (
-        c.strikePrice >= spyPrice &&
-        c.strikePrice <= spyPrice * (1 + MAX_OTM_PERCENT)
+        c.strikePrice <= spyPrice * (1 - minOtm) &&
+        c.strikePrice >= spyPrice * (1 - maxOtm)
       );
-    }
-    // Puts: strike at or below current price, but not too far
-    return (
-      c.strikePrice <= spyPrice &&
-      c.strikePrice >= spyPrice * (1 - MAX_OTM_PERCENT)
-    );
-  });
-
-  // If no candidates in zone, fall back to nearest OTM strike
-  if (candidates.length === 0) {
-    tradable.sort((a, b) => {
-      const aOtm =
-        optionType === "call"
-          ? a.strikePrice - spyPrice
-          : spyPrice - a.strikePrice;
-      const bOtm =
-        optionType === "call"
-          ? b.strikePrice - spyPrice
-          : spyPrice - b.strikePrice;
-      // Prefer slightly OTM (positive values) over ITM
-      if (aOtm >= 0 && bOtm < 0) return -1;
-      if (aOtm < 0 && bOtm >= 0) return 1;
-      return Math.abs(aOtm) - Math.abs(bOtm);
     });
-    candidates.push(tradable[0]);
-  }
 
-  // Score each candidate: get quotes and find the best risk/reward
-  let bestScore = -1;
-  let bestOption: {
-    symbol: string;
-    strikePrice: number;
-    type: "call" | "put";
-    estimatedPrice: number;
-  } | null = null;
+  // Pass 1: Primary zone (ATM to 1.5% OTM)
+  const primaryCandidates = filterZone(0, MAX_OTM_PERCENT);
+  let bestOption = await scoreCandidates(creds, primaryCandidates, optionType, spyPrice, budget, MAX_OTM_PERCENT);
 
-  for (const c of candidates) {
-    let price: number;
-    try {
-      const quote = await getOptionQuote(creds, c.symbol);
-      price = quote.midPrice > 0 ? quote.midPrice : quote.askPrice;
-    } catch {
-      price = c.closePrice ?? 0;
-    }
-
-    if (price <= 0) continue;
-
-    const contractCost = price * 100;
-    const numContracts = Math.floor(budget / contractCost);
-    if (numContracts < 1) continue;
-
-    // Proximity factor: 1.0 at ATM, linearly decays to 0.3 at max OTM distance
-    const otmDistance =
-      optionType === "call"
-        ? (c.strikePrice - spyPrice) / spyPrice
-        : (spyPrice - c.strikePrice) / spyPrice;
-    const proximity = Math.max(
-      0.3,
-      1.0 - (otmDistance / MAX_OTM_PERCENT) * 0.7,
-    );
-
-    // Score = contracts × proximity — maximizes leveraged exposure weighted by ITM probability
-    const score = numContracts * proximity;
-
-    if (score > bestScore) {
-      bestScore = score;
-      bestOption = {
-        symbol: c.symbol,
-        strikePrice: c.strikePrice,
-        type: optionType,
-        estimatedPrice: price,
-      };
+  // Pass 2: Extended zone (1.5% to 3% OTM) — only if primary zone had no affordable contracts
+  if (!bestOption) {
+    const extendedCandidates = filterZone(MAX_OTM_PERCENT, EXTENDED_OTM_PERCENT);
+    if (extendedCandidates.length > 0) {
+      logger.info("Primary zone unaffordable, searching extended zone", {
+        budget,
+        spy: spyPrice,
+        extendedStrikes: extendedCandidates.length,
+      });
+      bestOption = await scoreCandidates(creds, extendedCandidates, optionType, spyPrice, budget, EXTENDED_OTM_PERCENT);
     }
   }
 
   if (bestOption) {
+    const otmPct = optionType === "call"
+      ? ((bestOption.strikePrice - spyPrice) / spyPrice * 100).toFixed(1)
+      : ((spyPrice - bestOption.strikePrice) / spyPrice * 100).toFixed(1);
     logger.info("Option selected", {
       symbol: bestOption.symbol,
       strike: bestOption.strikePrice,
       price: bestOption.estimatedPrice,
       spy: spyPrice,
       budget,
-      score: bestScore.toFixed(1),
+      otmPercent: otmPct + "%",
+      zone: parseFloat(otmPct) <= MAX_OTM_PERCENT * 100 ? "primary" : "extended",
+      score: bestOption.score.toFixed(1),
     });
   }
 

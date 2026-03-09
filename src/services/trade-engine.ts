@@ -430,9 +430,9 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
     return;
   }
 
-  // Position size: max contracts we can buy within budget
+  // Position size: buy as many contracts as the risk-allocated budget allows
   const contractCost = option.estimatedPrice * 100;
-  const qty = Math.min(Math.floor(budget / contractCost), 100);
+  const qty = Math.floor(budget / contractCost);
   if (qty === 0) {
     insertTradeLog({
       mode: cfg.mode,

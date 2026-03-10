@@ -43,6 +43,8 @@ import {
 import type { TradeBotMode, RiskLevel, TradeType } from "../types";
 import { logger } from "../lib/logger";
 import { config } from "../config";
+import { importLiveSentiment } from "../services/data-feed";
+import { fetchLiveSignalFromTurso } from "../services/turso";
 
 const router = Router();
 
@@ -110,6 +112,34 @@ router.get("/api/sentiment/tradebot", (_req: Request, res: Response) => {
     signal,
     rawTotal: counts.rawTotal,
   });
+});
+
+/**
+ * GET /api/sentiment/synced
+ * Returns the live sentiment snapshot from GitHub (Pi-published data).
+ * Clients without their own comment data use this for trade signals.
+ */
+router.get("/api/sentiment/synced", async (_req: Request, res: Response) => {
+  const feed = await importLiveSentiment();
+  if (!feed) {
+    res.json({ available: false, message: "No live sentiment feed available" });
+    return;
+  }
+  res.json({ available: true, ...feed });
+});
+
+/**
+ * GET /api/sentiment/turso
+ * Returns the live trade signal from Turso cloud DB (real-time sync).
+ * Falls back to GitHub feed if Turso is not configured.
+ */
+router.get("/api/sentiment/turso", async (_req: Request, res: Response) => {
+  const signal = await fetchLiveSignalFromTurso();
+  if (!signal) {
+    res.json({ available: false, message: "Turso not configured or no data" });
+    return;
+  }
+  res.json({ available: true, ...signal });
 });
 
 /**

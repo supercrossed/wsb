@@ -1,4 +1,6 @@
 import cron from "node-cron";
+import { exec } from "child_process";
+import path from "path";
 
 import { config } from "../config";
 import { logger } from "../lib/logger";
@@ -19,11 +21,18 @@ import {
   bulkUpsertSpyPrices,
   saveCramerPicks,
   getCommentCountSince,
+  getTimeDecayedSentiment,
   purgeOldData,
 } from "./database";
 import { fetchSpyPrices } from "./spy";
 import { fetchAllCramerPicks } from "./cramer";
 import { importDataFeed } from "./data-feed";
+import {
+  initTurso,
+  initTursoSchema,
+  syncDailySentimentToTurso,
+  syncLiveSignalToTurso,
+} from "./turso";
 import {
   evaluateAndTrade,
   closeBeforeMarketClose,
@@ -305,6 +314,34 @@ async function pollAndAnalyze(): Promise<void> {
 
     saveDailySentiment(dailySentiment);
 
+    // Dual-write to Turso for cross-client sync
+    syncDailySentimentToTurso(dailySentiment);
+
+    // Also sync live trade signal to Turso
+    const lookbackUtc = Math.floor(Date.now() / 1000) - 48 * 3600;
+    const decayed = getTimeDecayedSentiment(lookbackUtc);
+    const decayedTotal = decayed.bullish + decayed.bearish + decayed.neutral;
+    if (decayedTotal > 0) {
+      const dBullPct = Math.round((decayed.bullish / decayedTotal) * 10000) / 100;
+      const dBearPct = Math.round((decayed.bearish / decayedTotal) * 10000) / 100;
+      const directional = dBullPct + dBearPct;
+      const bullRatio = directional > 0 ? (dBullPct / directional) * 100 : 0;
+      const bearRatio = directional > 0 ? (dBearPct / directional) * 100 : 0;
+      const spread = Math.abs(bullRatio - bearRatio);
+      const wsbSignal = directional === 0 || spread < 5 ? "HOLD" : bullRatio > bearRatio ? "CALLS" : "PUTS";
+      const inverseSignal = getInverseRecommendation(dBullPct, dBearPct);
+      syncLiveSignalToTurso({
+        decayedBullish: decayed.bullish,
+        decayedBearish: decayed.bearish,
+        decayedNeutral: decayed.neutral,
+        rawTotal: decayed.rawTotal,
+        bullishPercent: dBullPct,
+        bearishPercent: dBearPct,
+        wsbSignal,
+        inverseSignal,
+      });
+    }
+
     // Save historical entry for inverse strategy tracking
     const wsbSentiment =
       bullishPercent > bearishPercent ? "bullish" : "bearish";
@@ -334,6 +371,10 @@ export function startScheduler(): void {
 
   // Import historical data feed from GitHub (fills in missed days for exe users)
   importDataFeed();
+
+  // Initialize Turso cloud sync (optional — no-op if env vars not set)
+  initTurso();
+  initTursoSchema();
 
   // Initial poll + SPY backfill
   pollAndAnalyze();
@@ -441,6 +482,24 @@ export function startScheduler(): void {
     "0 0 * * *",
     () => {
       purgeOldData();
+    },
+    { timezone: "America/New_York" },
+  );
+
+  // Push live sentiment snapshot to GitHub every 30 min during extended market hours (7 AM - 5 PM EST).
+  // Clients fetch this from GitHub's CDN for synced trade signals.
+  cron.schedule(
+    "0,30 7-16 * * 1-5",
+    () => {
+      const scriptPath = path.resolve(__dirname, "../../scripts/push-live-sentiment.sh");
+      logger.info("Pushing live sentiment to GitHub");
+      exec(`bash "${scriptPath}"`, (error, stdout, stderr) => {
+        if (error) {
+          logger.warn("Live sentiment push failed", { error: error.message, stderr });
+          return;
+        }
+        logger.info("Live sentiment pushed", { output: stdout.trim() });
+      });
     },
     { timezone: "America/New_York" },
   );

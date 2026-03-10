@@ -4,6 +4,9 @@ import { getDb } from "./database";
 const FEED_URL =
   "https://raw.githubusercontent.com/supercrossed/wsb/master/data-feed/historical.json";
 
+const LIVE_FEED_URL =
+  "https://raw.githubusercontent.com/supercrossed/wsb/master/data-feed/sentiment-live.json";
+
 interface FeedEntry {
   date: string;
   wsb_sentiment: string;
@@ -117,5 +120,93 @@ export async function importDataFeed(): Promise<void> {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     logger.warn("Data feed import failed", { error: message });
+  }
+}
+
+interface LiveSentimentFeed {
+  updated_at: string;
+  decayed: {
+    bullish: number;
+    bearish: number;
+    neutral: number;
+    rawTotal: number;
+    bullishPercent: number;
+    bearishPercent: number;
+  };
+  signals: {
+    wsb: "CALLS" | "PUTS" | "HOLD";
+    inverse: "CALLS" | "PUTS" | "HOLD";
+  };
+  daily: {
+    date: string;
+    bullishCount: number;
+    bearishCount: number;
+    neutralCount: number;
+    totalComments: number;
+    bullishPercent: number;
+    bearishPercent: number;
+    recommendation: string;
+    threadType: string;
+  } | null;
+}
+
+/**
+ * Fetches the live sentiment snapshot from GitHub.
+ * Clients use this to get synced trade signals without collecting
+ * their own Reddit comments.
+ */
+export async function importLiveSentiment(): Promise<LiveSentimentFeed | null> {
+  try {
+    const response = await fetch(LIVE_FEED_URL);
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        logger.debug("No live sentiment feed available yet on GitHub");
+        return null;
+      }
+      throw new Error(`Live feed fetch failed: ${response.status}`);
+    }
+
+    const feed = (await response.json()) as LiveSentimentFeed;
+
+    // Backfill daily sentiment if we have it and our DB doesn't
+    if (feed.daily) {
+      const existing = getDb()
+        .prepare("SELECT 1 FROM daily_sentiment WHERE date = ?")
+        .get(feed.daily.date);
+
+      if (!existing) {
+        getDb()
+          .prepare(
+            `INSERT INTO daily_sentiment (date, bullish_count, bearish_count, neutral_count, total_comments,
+              bullish_percent, bearish_percent, neutral_percent, recommendation, thread_type, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+          )
+          .run(
+            feed.daily.date,
+            feed.daily.bullishCount,
+            feed.daily.bearishCount,
+            feed.daily.neutralCount,
+            feed.daily.totalComments,
+            feed.daily.bullishPercent,
+            feed.daily.bearishPercent,
+            feed.daily.recommendation,
+            feed.daily.threadType,
+          );
+      }
+    }
+
+    logger.info("Live sentiment imported", {
+      wsbSignal: feed.signals.wsb,
+      inverseSignal: feed.signals.inverse,
+      rawComments: feed.decayed.rawTotal,
+      updatedAt: feed.updated_at,
+    });
+
+    return feed;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn("Live sentiment import failed", { error: message });
+    return null;
   }
 }

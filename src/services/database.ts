@@ -238,6 +238,7 @@ export function initDatabase(dbPath: string): Database.Database {
   const tradeCfgSql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='tradebot_config'").get() as { sql: string } | undefined;
   if (tradeCfgSql && tradeCfgSql.sql.includes("'0dte', 'swing'") && !tradeCfgSql.sql.includes("'1dte'")) {
     db.exec(`
+      DROP TABLE IF EXISTS tradebot_config_new;
       CREATE TABLE tradebot_config_new (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         mode TEXT NOT NULL CHECK(mode IN ('wsb', 'inverse')),

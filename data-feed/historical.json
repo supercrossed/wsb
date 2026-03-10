@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-03-09T23:56:59.254Z",
+  "updated_at": "2026-03-10T07:45:00.000Z",
   "entries": [
     {
       "date": "2026-03-06",
@@ -13,11 +13,11 @@
     {
       "date": "2026-03-09",
       "wsb_sentiment": "bearish",
-      "inverse_recommendation": "HOLD",
+      "inverse_recommendation": "CALLS",
       "spy_open": 666.39,
       "spy_close": 678.27,
       "spy_change": 11.88,
-      "inverse_correct": null
+      "inverse_correct": 1
     },
     {
       "date": "2026-03-10",

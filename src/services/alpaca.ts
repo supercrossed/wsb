@@ -163,13 +163,15 @@ export interface AlpacaOptionContract {
 
 /**
  * Fetches 0DTE option contracts for a given underlying symbol.
- * Returns contracts expiring today, sorted by strike price proximity to current price.
+ * When underlyingPrice is provided, filters to strikes within 5% of ATM
+ * to ensure the API returns contracts in the tradable zone.
  */
 export async function getOptionsChain(
   creds: AlpacaCredentials,
   underlying: string,
   expirationDate: string,
   optionType: "call" | "put",
+  underlyingPrice?: number,
 ): Promise<AlpacaOptionContract[]> {
   const baseUrl = getBaseUrl(creds.paperTrading);
   const params = new URLSearchParams({
@@ -177,8 +179,15 @@ export async function getOptionsChain(
     expiration_date: expirationDate,
     type: optionType,
     status: "active",
-    limit: "50",
+    limit: "100",
   });
+
+  // Filter to strikes near ATM so the API returns relevant contracts
+  if (underlyingPrice && underlyingPrice > 0) {
+    const margin = 0.05; // 5% range around current price
+    params.set("strike_price_gte", String(Math.floor(underlyingPrice * (1 - margin))));
+    params.set("strike_price_lte", String(Math.ceil(underlyingPrice * (1 + margin))));
+  }
   const url = `${baseUrl}/v2/options/contracts?${params.toString()}`;
   const res = await fetch(url, { headers: getHeaders(creds) });
 

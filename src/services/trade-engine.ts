@@ -288,7 +288,7 @@ async function selectOption(
   const optionType = signal === "CALLS" ? "call" : "put";
   const greeksConfig = RISK_GREEKS[riskLevel];
 
-  const contracts = await getOptionsChain(creds, "SPY", today, optionType);
+  const contracts = await getOptionsChain(creds, "SPY", today, optionType, spyPrice);
   logger.info("Option chain fetched", {
     date: today,
     type: optionType,

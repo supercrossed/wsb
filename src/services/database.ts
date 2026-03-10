@@ -252,7 +252,9 @@ export function initDatabase(dbPath: string): Database.Database {
         updated_at TEXT NOT NULL DEFAULT (datetime('now')),
         UNIQUE(mode, paper_trading)
       );
-      INSERT INTO tradebot_config_new SELECT * FROM tradebot_config;
+      INSERT INTO tradebot_config_new (id, mode, api_key_id, api_secret_key, paper_trading, enabled, risk_level, trade_type, vix_enabled, created_at, updated_at)
+        SELECT id, mode, api_key_id, api_secret_key, paper_trading, enabled, risk_level, trade_type, vix_enabled, created_at, updated_at
+        FROM tradebot_config;
       DROP TABLE tradebot_config;
       ALTER TABLE tradebot_config_new RENAME TO tradebot_config;
     `);

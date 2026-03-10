@@ -1,0 +1,26 @@
+{
+  "updated_at": "2026-03-10T11:00:06.706Z",
+  "decayed": {
+    "bullish": 1324.1,
+    "bearish": 1271.1,
+    "neutral": 18388.2,
+    "rawTotal": 47562,
+    "bullishPercent": 6.31,
+    "bearishPercent": 6.06
+  },
+  "signals": {
+    "wsb": "HOLD",
+    "inverse": "HOLD"
+  },
+  "daily": {
+    "date": "2026-03-10",
+    "bullishCount": 1081,
+    "bearishCount": 1019,
+    "neutralCount": 19550,
+    "totalComments": 21650,
+    "bullishPercent": 4.99,
+    "bearishPercent": 4.71,
+    "recommendation": "HOLD",
+    "threadType": "overnight"
+  }
+}

@@ -73,7 +73,7 @@ const RISK_GREEKS: Record<RiskLevel, RiskGreeksConfig> = {
 };
 
 /** Interval for monitoring open positions (ms) */
-const MONITOR_INTERVAL_MS = 1_000; // check every 1 second
+const MONITOR_INTERVAL_MS = 5_000; // check every 5 seconds
 
 /** Latest time to enter a 0DTE trade (11:00 AM EST = 660 minutes).
  *  After this, theta decay makes entry too risky. */

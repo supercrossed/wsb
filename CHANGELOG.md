@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.9.2] - 2026-03-09
+
+- Fix option chain returning far OTM strikes by filtering to 5% range around ATM
+- Increase contract limit from 50 to 100 for better coverage
+- This was the root cause of today's failed trades (no contracts in ATM-3% zone)
+
+
 ## [1.9.1] - 2026-03-09
 
 - Fix historical tracker overwriting market-hours signal with overnight data

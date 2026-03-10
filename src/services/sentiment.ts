@@ -65,6 +65,12 @@ const WSB_PHRASE_SCORES: Array<{ pattern: RegExp; score: number }> = [
   { pattern: /\b(dumb(ass)?|stupid|idiot|clown|regard(ed)?)\s*(bol|bul|bull)(s)?\b/i, score: -3 },
   { pattern: /\b(bol|bul|bull)(s)?\s+(never\s+learn|in\s+shambles?|punching\s+air|crying|coping|seething|mad|salty|nightmare|getting\s+nightmare)/i, score: -3 },
 
+  // Food/cooking metaphors — WSB loves these for mocking bulls or bears
+  { pattern: /\b(roast|grill|cook|fry|smoke|bbq)(ed|ing)?\s+(bol|bul|bull)(s)?\b/i, score: -3 },
+  { pattern: /\b(bol|bul|bull)\s+(meat|steak|burger|tendies|roast)/i, score: -3 },
+  { pattern: /\b(roast|grill|cook|fry|smoke|bbq)(ed|ing)?\s+(ber|bear)(s)?\b/i, score: 3 },
+  { pattern: /\b(ber|bear)\s+(meat|steak|burger|roast)/i, score: 3 },
+
   // "us bols/bulls" = speaker identifies as bull = bullish
   { pattern: /\bus\s+(bol|bul|bull|thundercock)(s)?\b/i, score: 3 },
   { pattern: /\bus\s+(ber|bear)(s)?\b/i, score: -3 },

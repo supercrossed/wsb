@@ -544,6 +544,20 @@ export function saveHistoricalEntry(
   wsbSentiment: string,
   inverseRecommendation: string,
 ): void {
+  // Once a day has a directional recommendation (CALLS/PUTS), lock it in.
+  // Later polls (overnight thread) must not overwrite the market-hours signal.
+  const existing = getDb()
+    .prepare("SELECT inverse_recommendation FROM historical WHERE date = ?")
+    .get(date) as { inverse_recommendation: string } | undefined;
+
+  if (
+    existing &&
+    (existing.inverse_recommendation === "CALLS" ||
+      existing.inverse_recommendation === "PUTS")
+  ) {
+    return;
+  }
+
   const stmt = getDb().prepare(`
     INSERT INTO historical (date, wsb_sentiment, inverse_recommendation)
     VALUES (?, ?, ?)

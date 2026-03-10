@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.11.1] - 2026-03-09
+
+Fix trade type button toggling in dashboard, fix DB migration crash on startup
+
+
 ## [1.11.0] - 2026-03-10
 
 - **1DTE contract support**: trade bot can now buy next-day expiry SPY options instead of same-day (0DTE)

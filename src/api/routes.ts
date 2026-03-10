@@ -23,7 +23,7 @@ import {
   getTradeRounds,
   getEquityHistory,
 } from "../services/database";
-import { fetchSpyToday, fetchSpyRealtime } from "../services/spy";
+import { fetchSpyToday, fetchSpyRealtime, fetchVix } from "../services/spy";
 import { getActiveThreadType } from "../services/reddit";
 import { computeCramerIndex } from "../services/cramer";
 import { getInverseRecommendation } from "../services/sentiment";
@@ -325,6 +325,25 @@ router.get("/api/spy/history", (req: Request, res: Response) => {
   );
   const entries = getHistoricalComparison(days);
   res.json({ days, entries });
+});
+
+/**
+ * GET /api/vix
+ * Returns the current CBOE VIX level from Yahoo Finance.
+ */
+router.get("/api/vix", async (_req: Request, res: Response) => {
+  const vix = await fetchVix();
+  if (!vix) {
+    res.status(503).json({ error: "VIX data unavailable" });
+    return;
+  }
+  let regime: string;
+  if (vix.level < 15) regime = "calm";
+  else if (vix.level < 20) regime = "normal";
+  else if (vix.level < 25) regime = "elevated";
+  else if (vix.level < 30) regime = "high";
+  else regime = "extreme";
+  res.json({ level: vix.level, regime, fetchedAt: vix.fetchedAt });
 });
 
 /**
@@ -681,15 +700,16 @@ router.post("/api/tradebot/delete", (_req: Request, res: Response) => {
 
 /**
  * POST /api/tradebot/settings
- * Updates trade settings (risk level, trade type) for a bot.
- * Body: { mode, paperTrading, riskLevel, tradeType }
+ * Updates trade settings (risk level, trade type, VIX filter) for a bot.
+ * Body: { mode, paperTrading, riskLevel, tradeType, vixEnabled? }
  */
 router.post("/api/tradebot/settings", (_req: Request, res: Response) => {
-  const { mode, paperTrading, riskLevel, tradeType } = _req.body as {
+  const { mode, paperTrading, riskLevel, tradeType, vixEnabled } = _req.body as {
     mode: TradeBotMode;
     paperTrading: boolean;
     riskLevel: RiskLevel;
     tradeType: TradeType;
+    vixEnabled?: boolean;
   };
   if (mode !== "wsb" && mode !== "inverse") {
     res.status(400).json({ error: "Mode must be 'wsb' or 'inverse'" });
@@ -707,7 +727,7 @@ router.post("/api/tradebot/settings", (_req: Request, res: Response) => {
     res.status(400).json({ error: "tradeType must be '0dte' or 'swing'" });
     return;
   }
-  updateTradeSettings(mode, paperTrading ?? true, riskLevel, tradeType);
+  updateTradeSettings(mode, paperTrading ?? true, riskLevel, tradeType, vixEnabled);
   res.json({ success: true });
 });
 

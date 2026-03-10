@@ -20,7 +20,7 @@ import {
 import { getInverseRecommendation } from "./sentiment";
 
 import { isBotRunning } from "./tradebot";
-import { fetchSpyRealtime } from "./spy";
+import { fetchSpyRealtime, fetchVix } from "./spy";
 import type { AlpacaCredentials, RiskLevel, TradeBotConfig } from "../types";
 
 /**
@@ -72,6 +72,47 @@ const RISK_GREEKS: Record<RiskLevel, RiskGreeksConfig> = {
   yolo:  { minDelta: 0.00, maxIV: 1.00, searchExtendedFirst: true },
 };
 
+/**
+ * VIX-based position-size multiplier per risk level.
+ * Higher VIX = more cautious for safe, neutral for yolo.
+ */
+type VixRegime = "calm" | "normal" | "elevated" | "high" | "extreme";
+
+interface VixMultiplierResult {
+  multiplier: number;
+  regime: VixRegime;
+  skip: boolean;
+}
+
+function getVixMultiplier(vixLevel: number, riskLevel: RiskLevel): VixMultiplierResult {
+  if (vixLevel < 15) return { multiplier: 1.0, regime: "calm", skip: false };
+  if (vixLevel < 20) return { multiplier: 1.0, regime: "normal", skip: false };
+
+  if (vixLevel < 25) {
+    const m = { safe: 0.75, degen: 1.0, yolo: 1.25 }[riskLevel];
+    return { multiplier: m, regime: "elevated", skip: false };
+  }
+  if (vixLevel < 30) {
+    const m = { safe: 0.5, degen: 0.75, yolo: 1.0 }[riskLevel];
+    return { multiplier: m, regime: "high", skip: false };
+  }
+
+  // VIX 30+: extreme — safe skips entirely
+  const m = { safe: 0.0, degen: 0.5, yolo: 1.0 }[riskLevel];
+  return { multiplier: m, regime: "extreme", skip: riskLevel === "safe" };
+}
+
+/**
+ * VIX-adjusted stop loss and profit target.
+ * Wider stops in high-vol to avoid whipsaw exits.
+ */
+function getVixAdjustedExitParams(vixLevel: number): { stopLossPct: number; profitTargetPct: number } {
+  if (vixLevel < 20) return { stopLossPct: STOP_LOSS_PCT, profitTargetPct: PROFIT_TARGET_PCT };
+  if (vixLevel < 25) return { stopLossPct: 0.25, profitTargetPct: 0.15 };
+  if (vixLevel < 30) return { stopLossPct: 0.30, profitTargetPct: 0.20 };
+  return { stopLossPct: 0.35, profitTargetPct: 0.25 };
+}
+
 /** Interval for monitoring open positions (ms) */
 const MONITOR_INTERVAL_MS = 5_000; // check every 5 seconds
 
@@ -99,6 +140,9 @@ interface ActivePosition {
   highWaterMark: number; // highest price seen (for trailing stop)
   creds: AlpacaCredentials;
   tradeRoundId: number; // links to trade_rounds.id
+  stopLossPct: number;
+  profitTargetPct: number;
+  vixAtEntry: number | null;
 }
 
 const activePositions: Map<string, ActivePosition> = new Map();
@@ -509,6 +553,48 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
     return;
   }
 
+  // Fetch VIX level for position-size adjustment (if enabled)
+  let vixLevel: number | null = null;
+  let vixMult = 1.0;
+  let exitParams = { stopLossPct: STOP_LOSS_PCT, profitTargetPct: PROFIT_TARGET_PCT };
+  if (cfg.vixEnabled) {
+    const vixData = await fetchVix();
+    if (vixData) {
+      vixLevel = vixData.level;
+      const vixResult = getVixMultiplier(vixLevel, cfg.riskLevel);
+      vixMult = vixResult.multiplier;
+      exitParams = getVixAdjustedExitParams(vixLevel);
+
+      logger.info("VIX analysis", {
+        bot: botLabel,
+        vix: vixLevel,
+        regime: vixResult.regime,
+        multiplier: vixMult,
+        skip: vixResult.skip,
+        stopLoss: `${(exitParams.stopLossPct * 100).toFixed(0)}%`,
+        profitTarget: `${(exitParams.profitTargetPct * 100).toFixed(0)}%`,
+      });
+
+      if (vixResult.skip) {
+        insertTradeLog({
+          mode: cfg.mode,
+          action: "vix_skip",
+          symbol: "SPY",
+          side: "buy",
+          qty: 0,
+          price: null,
+          orderId: null,
+          status: "cancelled",
+          message: `VIX ${vixLevel.toFixed(1)} (${vixResult.regime}) — too volatile for ${cfg.riskLevel} risk level, skipping`,
+        });
+        tradedToday.set(botKey, true);
+        return;
+      }
+    } else {
+      logger.warn("VIX data unavailable, proceeding without VIX adjustment", { bot: botLabel });
+    }
+  }
+
   // Get account equity for budget calculation
   let equity: number;
   try {
@@ -520,7 +606,7 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
     return;
   }
 
-  const budget = equity * RISK_ALLOCATION[cfg.riskLevel];
+  const budget = equity * RISK_ALLOCATION[cfg.riskLevel] * vixMult;
 
   // Select optimal option contract given our budget
   const option = await selectOption(creds, signal, spyPrice, budget, cfg.riskLevel);
@@ -601,7 +687,7 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
       price: option.estimatedPrice,
       orderId: order.id,
       status: order.status === "filled" ? "filled" : "submitted",
-      message: `${signal} ${qty}x ${option.type.toUpperCase()} SPY $${option.strikePrice} @ $${option.estimatedPrice.toFixed(2)} [${cfg.riskLevel}]${greeksStr}`,
+      message: `${signal} ${qty}x ${option.type.toUpperCase()} SPY $${option.strikePrice} @ $${option.estimatedPrice.toFixed(2)} [${cfg.riskLevel}]${greeksStr}${vixLevel != null ? ` | VIX ${vixLevel.toFixed(1)} (${vixMult}x)` : ""}`,
     });
 
     const roundId = insertTradeRound({
@@ -630,6 +716,9 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
       highWaterMark: option.estimatedPrice,
       creds,
       tradeRoundId: roundId,
+      stopLossPct: exitParams.stopLossPct,
+      profitTargetPct: exitParams.profitTargetPct,
+      vixAtEntry: vixLevel,
     });
 
     tradedToday.set(botKey, true);
@@ -683,10 +772,10 @@ async function monitorPositions(): Promise<void> {
       let shouldClose = false;
       let reason = "";
 
-      // 1. Hard stop loss: -20%
-      if (pnlPct <= -STOP_LOSS_PCT) {
+      // 1. Hard stop loss (VIX-adjusted if enabled)
+      if (pnlPct <= -pos.stopLossPct) {
         shouldClose = true;
-        reason = `Stop loss hit (${(pnlPct * 100).toFixed(1)}%)`;
+        reason = `Stop loss hit (${(pnlPct * 100).toFixed(1)}%${pos.vixAtEntry ? `, VIX ${pos.vixAtEntry.toFixed(1)}` : ""})`;
       }
 
       // 2. Near market close: force exit
@@ -695,8 +784,8 @@ async function monitorPositions(): Promise<void> {
         reason = `Market close exit (P/L: ${(pnlPct * 100).toFixed(1)}%)`;
       }
 
-      // 3. Profit/trailing logic
-      if (!shouldClose && pnlPct >= PROFIT_TARGET_PCT) {
+      // 3. Profit/trailing logic (VIX-adjusted target)
+      if (!shouldClose && pnlPct >= pos.profitTargetPct) {
         // Check momentum: is price still climbing or has it dropped from peak?
         const hwmPnl = (pos.highWaterMark - pos.entryPrice) / pos.entryPrice;
         const dropFromPeak =
@@ -713,7 +802,7 @@ async function monitorPositions(): Promise<void> {
         if (
           !shouldClose &&
           dropFromPeak > 0.03 &&
-          pnlPct >= PROFIT_TARGET_PCT
+          pnlPct >= pos.profitTargetPct
         ) {
           shouldClose = true;
           reason = `Momentum fade — locking profit (${(pnlPct * 100).toFixed(1)}%, peak drop ${(dropFromPeak * 100).toFixed(1)}%)`;

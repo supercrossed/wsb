@@ -225,6 +225,12 @@ export function initDatabase(dbPath: string): Database.Database {
     );
     logger.info("Migrated tradebot_config: added trade_type column");
   }
+  if (!colNames.has("vix_enabled")) {
+    db.exec(
+      "ALTER TABLE tradebot_config ADD COLUMN vix_enabled INTEGER NOT NULL DEFAULT 0",
+    );
+    logger.info("Migrated tradebot_config: added vix_enabled column");
+  }
 
   // Migrate comments: add score column if missing
   const commentColInfo = db
@@ -771,6 +777,7 @@ export function getTradeBotConfig(
     enabled: Boolean(row.enabled),
     riskLevel: (row.risk_level as RiskLevel) ?? "safe",
     tradeType: (row.trade_type as TradeType) ?? "0dte",
+    vixEnabled: Boolean(row.vix_enabled),
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };
@@ -790,6 +797,7 @@ export function getAllTradeBotConfigs(): TradeBotConfig[] {
     enabled: Boolean(row.enabled),
     riskLevel: (row.risk_level as RiskLevel) ?? "safe",
     tradeType: (row.trade_type as TradeType) ?? "0dte",
+    vixEnabled: Boolean(row.vix_enabled),
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   }));
@@ -837,15 +845,27 @@ export function updateTradeSettings(
   paperTrading: boolean,
   riskLevel: RiskLevel,
   tradeType: TradeType,
+  vixEnabled?: boolean,
 ): void {
-  getDb()
-    .prepare(
-      `
-    UPDATE tradebot_config SET risk_level = ?, trade_type = ?, updated_at = datetime('now')
-    WHERE mode = ? AND paper_trading = ?
-  `,
-    )
-    .run(riskLevel, tradeType, mode, paperTrading ? 1 : 0);
+  if (vixEnabled !== undefined) {
+    getDb()
+      .prepare(
+        `
+      UPDATE tradebot_config SET risk_level = ?, trade_type = ?, vix_enabled = ?, updated_at = datetime('now')
+      WHERE mode = ? AND paper_trading = ?
+    `,
+      )
+      .run(riskLevel, tradeType, vixEnabled ? 1 : 0, mode, paperTrading ? 1 : 0);
+  } else {
+    getDb()
+      .prepare(
+        `
+      UPDATE tradebot_config SET risk_level = ?, trade_type = ?, updated_at = datetime('now')
+      WHERE mode = ? AND paper_trading = ?
+    `,
+      )
+      .run(riskLevel, tradeType, mode, paperTrading ? 1 : 0);
+  }
 }
 
 export function deleteTradeBotConfig(

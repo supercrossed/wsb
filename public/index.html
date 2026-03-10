@@ -3240,15 +3240,17 @@
         var activeBtn = panel.querySelector(".tb-risk-btn.active");
         if (!activeBtn) return;
         var newRisk = activeBtn.dataset.risk;
+        var vixToggle = panel.querySelector(".tb-vix-toggle");
+        var vixEnabled = vixToggle ? vixToggle.checked : false;
         try {
           var res = await fetch("/api/tradebot/settings", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mode: mode, paperTrading: paperTrading, riskLevel: newRisk, tradeType: "0dte" }),
+            body: JSON.stringify({ mode: mode, paperTrading: paperTrading, riskLevel: newRisk, tradeType: "0dte", vixEnabled: vixEnabled }),
           });
           var data = await res.json();
           if (!res.ok || !data.success) {
-            alert(data.error || "Failed to update risk level.");
+            alert(data.error || "Failed to update settings.");
             return;
           }
           fetchAllBotStatuses();
@@ -3325,6 +3327,7 @@
               '">' +
               riskLabel +
               "</span>" +
+              (bot.vixEnabled ? '<span style="font-size:0.65rem; background:var(--orange, #f59e0b); color:#000; padding:1px 6px; border-radius:4px; font-weight:600;">VIX</span>' : '') +
               '<span class="tb-bot-row-equity">' +
               equityText +
               "</span>" +
@@ -3356,9 +3359,23 @@
                 '; cursor:pointer; font-size:0.78rem; font-weight:600; text-transform:uppercase;">' +
                 lvl + " " + pcts[lvl] + "</button>";
             }).join("");
+            var vixChecked = bot.vixEnabled ? " checked" : "";
             settingsPanel.innerHTML =
               '<div style="margin-bottom:8px; font-size:0.75rem; color:var(--text-muted); font-weight:600;">RISK LEVEL</div>' +
               '<div style="margin-bottom:10px;">' + riskBtns + '</div>' +
+              '<div style="margin-bottom:10px; display:flex; align-items:center; gap:8px;">' +
+              '<label style="font-size:0.75rem; color:var(--text-muted); font-weight:600; margin:0;">VIX FILTER</label>' +
+              '<label style="position:relative; display:inline-block; width:36px; height:20px; margin:0;">' +
+              '<input type="checkbox" class="tb-vix-toggle"' + vixChecked + ' style="opacity:0; width:0; height:0;">' +
+              '<span style="position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background:' +
+              (bot.vixEnabled ? 'var(--blue)' : 'var(--surface-raised)') +
+              '; border-radius:10px; border:1px solid var(--border); transition:0.2s;"></span>' +
+              '<span style="position:absolute; content:\'\'; height:14px; width:14px; left:' +
+              (bot.vixEnabled ? '18px' : '3px') +
+              '; bottom:3px; background:white; border-radius:50%; transition:0.2s;"></span>' +
+              '</label>' +
+              '<span style="font-size:0.7rem; color:var(--text-muted);">Adjusts position size & stops based on VIX level</span>' +
+              '</div>' +
               '<button class="tb-btn tb-btn-success" style="font-size:0.75rem; padding:5px 16px;" onclick="saveBotRisk(\'' +
               bot.mode + "'," + bot.paperTrading + ",'" + panelId + "'" +
               ')">Save</button>';
@@ -3377,6 +3394,16 @@
                 btn.style.color = "#fff";
               });
             });
+
+            // Wire up VIX toggle visual
+            var vixInput = settingsPanel.querySelector(".tb-vix-toggle");
+            if (vixInput) {
+              vixInput.addEventListener("change", function() {
+                var slider = this.parentElement.querySelectorAll("span");
+                slider[0].style.background = this.checked ? "var(--blue)" : "var(--surface-raised)";
+                slider[1].style.left = this.checked ? "18px" : "3px";
+              });
+            }
 
             // Show positions inline if bot has any
             if (bot.positions && bot.positions.length > 0) {

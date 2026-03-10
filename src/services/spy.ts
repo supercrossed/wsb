@@ -191,6 +191,61 @@ export async function fetchSpyRealtime(): Promise<SpyRealtimeQuote | null> {
   }
 }
 
+// Cache VIX quote for 60 seconds (VIX moves slowly)
+let vixCache: { level: number; fetchedAt: number } | null = null;
+const VIX_CACHE_MS = 60_000;
+
+/**
+ * Fetches the current CBOE VIX level from Yahoo Finance.
+ * Returns null on failure; cached for 60 seconds.
+ */
+export async function fetchVix(): Promise<{ level: number; fetchedAt: number } | null> {
+  if (vixCache && Date.now() - vixCache.fetchedAt < VIX_CACHE_MS) {
+    return vixCache;
+  }
+
+  try {
+    const url = "https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?range=1d&interval=1m";
+
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; wsb-sentiment-bot/1.0)",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Yahoo Finance VIX API returned ${response.status}: ${response.statusText}`);
+    }
+
+    const data = (await response.json()) as { chart?: { result?: YahooChartResult[] } };
+    const result = data?.chart?.result?.[0];
+
+    if (!result?.meta) {
+      throw new Error("Unexpected Yahoo Finance VIX response structure");
+    }
+
+    let level = result.meta.regularMarketPrice;
+    if (result.timestamp && result.indicators?.quote?.[0]) {
+      const closes = result.indicators.quote[0].close;
+      for (let i = closes.length - 1; i >= 0; i--) {
+        if (closes[i] != null) {
+          level = closes[i];
+          break;
+        }
+      }
+    }
+
+    level = Math.round(level * 100) / 100;
+    vixCache = { level, fetchedAt: Date.now() };
+    logger.info("Fetched VIX level", { level });
+    return vixCache;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn("Failed to fetch VIX", { error: message });
+    return vixCache ?? null;
+  }
+}
+
 /**
  * Fetches just today's SPY quote (current price + daily change).
  */

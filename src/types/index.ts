@@ -113,6 +113,7 @@ export interface TradeBotConfig {
   enabled: boolean;
   riskLevel: RiskLevel;
   tradeType: TradeType;
+  vixEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -122,10 +123,16 @@ export interface TradeBotStatus {
   mode: TradeBotMode;
   paperTrading: boolean;
   riskLevel: RiskLevel;
+  vixEnabled: boolean;
   accountEquity: number | null;
   accountCash: number | null;
   lastTradeAt: string | null;
   positions: AlpacaPosition[];
+}
+
+export interface VixData {
+  level: number;
+  fetchedAt: number;
 }
 
 export interface AlpacaPosition {

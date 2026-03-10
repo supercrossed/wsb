@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.10.0] - 2026-03-10
+
+- VIX-aware position sizing: fetches live VIX from Yahoo Finance, adjusts position size per risk level (safe reduces in high-vol, yolo stays aggressive)
+- VIX adjusts stop loss and profit targets in volatile markets (wider stops, higher targets)
+- User-configurable VIX toggle per bot in dashboard settings
+- VIX badge on bot card when enabled, GET /api/vix endpoint
+- Reduced position monitor polling from 1s to 5s to stay within Alpaca rate limits
+
 ## [1.9.2] - 2026-03-09
 
 - Fix option chain returning far OTM strikes by filtering to 5% range around ATM

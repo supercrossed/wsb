@@ -89,7 +89,7 @@ export interface CramerIndex {
 // Trade bot types
 export type TradeBotMode = "wsb" | "inverse";
 export type RiskLevel = "safe" | "degen" | "yolo";
-export type TradeType = "0dte" | "swing";
+export type TradeType = "0dte" | "1dte" | "swing";
 
 /** Unique identifier for a bot instance: mode + paper/live */
 export type BotKey = `${TradeBotMode}_paper` | `${TradeBotMode}_live`;
@@ -123,6 +123,7 @@ export interface TradeBotStatus {
   mode: TradeBotMode;
   paperTrading: boolean;
   riskLevel: RiskLevel;
+  tradeType: TradeType;
   vixEnabled: boolean;
   accountEquity: number | null;
   accountCash: number | null;

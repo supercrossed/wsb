@@ -716,7 +716,7 @@ router.post("/api/tradebot/settings", (_req: Request, res: Response) => {
     return;
   }
   const validRisk: RiskLevel[] = ["safe", "degen", "yolo"];
-  const validType: TradeType[] = ["0dte", "swing"];
+  const validType: TradeType[] = ["0dte", "1dte", "swing"];
   if (!validRisk.includes(riskLevel)) {
     res
       .status(400)
@@ -724,7 +724,7 @@ router.post("/api/tradebot/settings", (_req: Request, res: Response) => {
     return;
   }
   if (!validType.includes(tradeType)) {
-    res.status(400).json({ error: "tradeType must be '0dte' or 'swing'" });
+    res.status(400).json({ error: "tradeType must be '0dte', '1dte', or 'swing'" });
     return;
   }
   updateTradeSettings(mode, paperTrading ?? true, riskLevel, tradeType, vixEnabled);

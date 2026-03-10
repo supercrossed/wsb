@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.11.0] - 2026-03-10
+
+- **1DTE contract support**: trade bot can now buy next-day expiry SPY options instead of same-day (0DTE)
+- **Theta-aware scoring for 1DTE**: option selection penalizes contracts with high theta decay relative to price, favoring contracts that retain value overnight
+- **Overnight position hold**: 1DTE positions carry overnight and close on expiration day at 3:45 PM instead of same-day EOD
+- **Later entry cutoff for 1DTE**: entry window extends to 1:00 PM EST (vs 11:00 AM for 0DTE) since theta decay is less severe
+- **Trade type selector**: new 0DTE/1DTE toggle in bot edit panel and Trade Settings card, with trade type badge on bot card
+- **DB migration**: safe table rebuild to update CHECK constraint for existing databases
+
 ## [1.10.0] - 2026-03-10
 
 - VIX-aware position sizing: fetches live VIX from Yahoo Finance, adjusts position size per risk level (safe reduces in high-vol, yolo stays aggressive)

@@ -114,7 +114,7 @@ export function initDatabase(dbPath: string): Database.Database {
       paper_trading INTEGER NOT NULL DEFAULT 1,
       enabled INTEGER NOT NULL DEFAULT 0,
       risk_level TEXT NOT NULL DEFAULT 'safe' CHECK(risk_level IN ('safe', 'degen', 'yolo')),
-      trade_type TEXT NOT NULL DEFAULT '0dte' CHECK(trade_type IN ('0dte', 'swing')),
+      trade_type TEXT NOT NULL DEFAULT '0dte' CHECK(trade_type IN ('0dte', '1dte', 'swing')),
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(mode, paper_trading)
@@ -221,7 +221,7 @@ export function initDatabase(dbPath: string): Database.Database {
   }
   if (!colNames.has("trade_type")) {
     db.exec(
-      "ALTER TABLE tradebot_config ADD COLUMN trade_type TEXT NOT NULL DEFAULT '0dte' CHECK(trade_type IN ('0dte', 'swing'))",
+      "ALTER TABLE tradebot_config ADD COLUMN trade_type TEXT NOT NULL DEFAULT '0dte' CHECK(trade_type IN ('0dte', '1dte', 'swing'))",
     );
     logger.info("Migrated tradebot_config: added trade_type column");
   }
@@ -230,6 +230,33 @@ export function initDatabase(dbPath: string): Database.Database {
       "ALTER TABLE tradebot_config ADD COLUMN vix_enabled INTEGER NOT NULL DEFAULT 0",
     );
     logger.info("Migrated tradebot_config: added vix_enabled column");
+  }
+
+  // Migrate trade_type CHECK constraint to include '1dte' for existing DBs.
+  // SQLite doesn't support ALTER CHECK, so we rebuild the table.
+  // We detect the old constraint by checking the table SQL definition.
+  const tradeCfgSql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='tradebot_config'").get() as { sql: string } | undefined;
+  if (tradeCfgSql && tradeCfgSql.sql.includes("'0dte', 'swing'") && !tradeCfgSql.sql.includes("'1dte'")) {
+    db.exec(`
+      CREATE TABLE tradebot_config_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mode TEXT NOT NULL CHECK(mode IN ('wsb', 'inverse')),
+        api_key_id TEXT NOT NULL,
+        api_secret_key TEXT NOT NULL,
+        paper_trading INTEGER NOT NULL DEFAULT 1,
+        enabled INTEGER NOT NULL DEFAULT 0,
+        risk_level TEXT NOT NULL DEFAULT 'safe' CHECK(risk_level IN ('safe', 'degen', 'yolo')),
+        trade_type TEXT NOT NULL DEFAULT '0dte' CHECK(trade_type IN ('0dte', '1dte', 'swing')),
+        vix_enabled INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(mode, paper_trading)
+      );
+      INSERT INTO tradebot_config_new SELECT * FROM tradebot_config;
+      DROP TABLE tradebot_config;
+      ALTER TABLE tradebot_config_new RENAME TO tradebot_config;
+    `);
+    logger.info("Migrated tradebot_config: updated trade_type CHECK to include '1dte'");
   }
 
   // Migrate comments: add score column if missing

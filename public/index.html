@@ -1814,7 +1814,10 @@
               <label>Trade Type</label>
               <div class="tb-mode-toggle" id="tbTradeTypeToggle">
                 <button class="active" data-tradetype="0dte">
-                  0DTE Options
+                  0DTE
+                </button>
+                <button data-tradetype="1dte">
+                  1DTE
                 </button>
               </div>
               <div
@@ -1823,10 +1826,11 @@
                   font-size: 0.75rem;
                   margin-top: 6px;
                 "
+                id="tbTradeTypeDesc"
               >
-                One trade per day &mdash; SPY 0DTE calls or puts based on
-                sentiment signal. Buys at market open, exits on profit target
-                (+10%), stop loss (-20%), or trailing stop.
+                Same-day expiry &mdash; SPY 0DTE calls or puts based on
+                sentiment signal. Buys at market open, exits on profit target,
+                stop loss, or trailing stop. Closes by 3:45 PM.
               </div>
             </div>
             <div class="tb-form-group">
@@ -3242,11 +3246,13 @@
         var newRisk = activeBtn.dataset.risk;
         var vixToggle = panel.querySelector(".tb-vix-toggle");
         var vixEnabled = vixToggle ? vixToggle.checked : false;
+        var activeTypeBtn = panel.querySelector(".tb-type-btn.active");
+        var tradeType = activeTypeBtn ? activeTypeBtn.dataset.tradetype : "0dte";
         try {
           var res = await fetch("/api/tradebot/settings", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mode: mode, paperTrading: paperTrading, riskLevel: newRisk, tradeType: "0dte", vixEnabled: vixEnabled }),
+            body: JSON.stringify({ mode: mode, paperTrading: paperTrading, riskLevel: newRisk, tradeType: tradeType, vixEnabled: vixEnabled }),
           });
           var data = await res.json();
           if (!res.ok || !data.success) {
@@ -3327,6 +3333,7 @@
               '">' +
               riskLabel +
               "</span>" +
+              '<span style="font-size:0.65rem; background:' + ((bot.tradeType || "0dte") === "1dte" ? "#8b5cf6" : "var(--blue)") + '; color:#fff; padding:1px 6px; border-radius:4px; font-weight:600;">' + (bot.tradeType || "0DTE").toUpperCase() + '</span>' +
               (bot.vixEnabled ? '<span style="font-size:0.65rem; background:var(--orange, #f59e0b); color:#000; padding:1px 6px; border-radius:4px; font-weight:600;">VIX</span>' : '') +
               '<span class="tb-bot-row-equity">' +
               equityText +
@@ -3359,8 +3366,21 @@
                 '; cursor:pointer; font-size:0.78rem; font-weight:600; text-transform:uppercase;">' +
                 lvl + " " + pcts[lvl] + "</button>";
             }).join("");
+            var tradeType = bot.tradeType || "0dte";
+            var typeBtns = ["0dte", "1dte"].map(function(t) {
+              var labels = { "0dte": "0DTE", "1dte": "1DTE" };
+              var active = t === tradeType ? " active" : "";
+              return '<button class="tb-type-btn' + active + '" data-tradetype="' + t +
+                '" style="padding:6px 14px; margin-right:6px; border-radius:6px; border:1px solid var(--border); background:' +
+                (t === tradeType ? "var(--blue)" : "var(--surface-raised)") +
+                '; color:' + (t === tradeType ? "#fff" : "var(--text)") +
+                '; cursor:pointer; font-size:0.78rem; font-weight:600; text-transform:uppercase;">' +
+                labels[t] + "</button>";
+            }).join("");
             var vixChecked = bot.vixEnabled ? " checked" : "";
             settingsPanel.innerHTML =
+              '<div style="margin-bottom:8px; font-size:0.75rem; color:var(--text-muted); font-weight:600;">TRADE TYPE</div>' +
+              '<div style="margin-bottom:10px;">' + typeBtns + '</div>' +
               '<div style="margin-bottom:8px; font-size:0.75rem; color:var(--text-muted); font-weight:600;">RISK LEVEL</div>' +
               '<div style="margin-bottom:10px;">' + riskBtns + '</div>' +
               '<div style="margin-bottom:10px; display:flex; align-items:center; gap:8px;">' +
@@ -3380,6 +3400,20 @@
               bot.mode + "'," + bot.paperTrading + ",'" + panelId + "'" +
               ')">Save</button>';
             container.appendChild(settingsPanel);
+
+            // Wire up trade type button clicks within this panel
+            settingsPanel.querySelectorAll(".tb-type-btn").forEach(function(btn) {
+              btn.addEventListener("click", function() {
+                settingsPanel.querySelectorAll(".tb-type-btn").forEach(function(b) {
+                  b.classList.remove("active");
+                  b.style.background = "var(--surface-raised)";
+                  b.style.color = "var(--text)";
+                });
+                btn.classList.add("active");
+                btn.style.background = "var(--blue)";
+                btn.style.color = "#fff";
+              });
+            });
 
             // Wire up risk button clicks within this panel
             settingsPanel.querySelectorAll(".tb-risk-btn").forEach(function(btn) {
@@ -3468,6 +3502,22 @@
               acctDescs[btn.dataset.accttype] || "";
           });
         });
+
+      // Trade type toggle
+      const tradeTypeDescs = {
+        "0dte": "Same-day expiry \u2014 SPY 0DTE calls or puts based on sentiment signal. Buys at market open, exits on profit target, stop loss, or trailing stop. Closes by 3:45 PM.",
+        "1dte": "Next-day expiry \u2014 SPY 1DTE calls or puts. Holds overnight for larger moves. Theta-aware scoring penalizes fast-decaying contracts. Closes by 3:45 PM on expiration day.",
+      };
+      document.querySelectorAll("#tbTradeTypeToggle button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document
+            .querySelectorAll("#tbTradeTypeToggle button")
+            .forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          document.getElementById("tbTradeTypeDesc").textContent =
+            tradeTypeDescs[btn.dataset.tradetype] || "";
+        });
+      });
 
       // Risk level toggle
       const riskDescs = {

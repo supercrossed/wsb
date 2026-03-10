@@ -118,7 +118,11 @@ const MONITOR_INTERVAL_MS = 5_000; // check every 5 seconds
 
 /** Latest time to enter a 0DTE trade (11:00 AM EST = 660 minutes).
  *  After this, theta decay makes entry too risky. */
-const ENTRY_CUTOFF_MINUTES = 660;
+const ENTRY_CUTOFF_MINUTES_0DTE = 660;
+
+/** Latest time to enter a 1DTE trade (1:00 PM EST = 780 minutes).
+ *  More lenient than 0DTE since theta decay is spread across a full day. */
+const ENTRY_CUTOFF_MINUTES_1DTE = 780;
 
 /**
  * Tracks whether we've placed a trade today for each bot key.
@@ -143,6 +147,8 @@ interface ActivePosition {
   stopLossPct: number;
   profitTargetPct: number;
   vixAtEntry: number | null;
+  tradeType: "0dte" | "1dte";
+  expirationDate: string; // YYYY-MM-DD the option expires
 }
 
 const activePositions: Map<string, ActivePosition> = new Map();
@@ -153,8 +159,23 @@ let monitorInterval: ReturnType<typeof setInterval> | null = null;
  */
 export function resetDailyTrades(): void {
   tradedToday.clear();
-  activePositions.clear();
-  logger.info("Daily trade tracker reset");
+  // Preserve 1DTE positions that carry overnight — they expire today and
+  // will be closed by the position monitor or EOD safety net.
+  const overnightKeys: string[] = [];
+  for (const [key, pos] of activePositions.entries()) {
+    if (pos.tradeType === "1dte" && pos.expirationDate >= getTodayEST()) {
+      overnightKeys.push(key);
+      // Mark as already traded so we don't open a second position
+      tradedToday.set(key, true);
+    }
+  }
+  // Remove positions that expired yesterday (0DTE from previous day)
+  for (const key of activePositions.keys()) {
+    if (!overnightKeys.includes(key)) {
+      activePositions.delete(key);
+    }
+  }
+  logger.info("Daily trade tracker reset", { overnightPositions: overnightKeys.length });
 }
 
 function getTodayEST(): string {
@@ -162,6 +183,23 @@ function getTodayEST(): string {
   const est = new Date(
     now.toLocaleString("en-US", { timeZone: "America/New_York" }),
   );
+  const year = est.getFullYear();
+  const month = String(est.getMonth() + 1).padStart(2, "0");
+  const day = String(est.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/** Returns the next trading day's date (skips weekends). */
+function getNextTradingDayEST(): string {
+  const now = new Date();
+  const est = new Date(
+    now.toLocaleString("en-US", { timeZone: "America/New_York" }),
+  );
+  // Advance to next day, skip weekends
+  est.setDate(est.getDate() + 1);
+  while (est.getDay() === 0 || est.getDay() === 6) {
+    est.setDate(est.getDate() + 1);
+  }
   const year = est.getFullYear();
   const month = String(est.getMonth() + 1).padStart(2, "0");
   const day = String(est.getDate()).padStart(2, "0");
@@ -224,6 +262,7 @@ async function scoreCandidates(
   budget: number,
   zoneMaxOtm: number,
   greeksConfig: RiskGreeksConfig,
+  useTheta: boolean = false,
 ): Promise<ScoredOption | null> {
   let bestScore = -1;
   let bestOption: ScoredOption | null = null;
@@ -274,8 +313,18 @@ async function scoreCandidates(
       );
     }
 
-    // Score = contracts × delta — maximizes total dollar exposure per $1 SPY move
-    const score = numContracts * sensitivity;
+    // For 1DTE, penalize high theta decay: score × (1 - thetaPenalty).
+    // Theta is negative (cost per day); normalize relative to option price.
+    let thetaFactor = 1.0;
+    if (useTheta && greeks && greeks.theta < 0) {
+      // thetaPenalty = fraction of option price lost per day to theta
+      const thetaPenalty = Math.min(0.5, Math.abs(greeks.theta) / price);
+      thetaFactor = 1.0 - thetaPenalty;
+    }
+
+    // Score = contracts × delta × thetaFactor
+    // 0DTE: thetaFactor=1.0 (no penalty). 1DTE: penalizes contracts bleeding value overnight.
+    const score = numContracts * sensitivity * thetaFactor;
 
     if (score > bestScore) {
       bestScore = score;
@@ -321,6 +370,8 @@ async function selectOption(
   spyPrice: number,
   budget: number,
   riskLevel: RiskLevel,
+  expirationDate?: string,
+  useTheta: boolean = false,
 ): Promise<{
   symbol: string;
   strikePrice: number;
@@ -328,20 +379,20 @@ async function selectOption(
   estimatedPrice: number;
   greeks: OptionGreeks | null;
 } | null> {
-  const today = getTodayEST();
+  const expDate = expirationDate ?? getTodayEST();
   const optionType = signal === "CALLS" ? "call" : "put";
   const greeksConfig = RISK_GREEKS[riskLevel];
 
-  const contracts = await getOptionsChain(creds, "SPY", today, optionType, spyPrice);
+  const contracts = await getOptionsChain(creds, "SPY", expDate, optionType, spyPrice);
   logger.info("Option chain fetched", {
-    date: today,
+    date: expDate,
     type: optionType,
     totalContracts: contracts.length,
     strikes: contracts.slice(0, 5).map((c) => c.strikePrice),
     spy: spyPrice,
   });
   if (contracts.length === 0) {
-    logger.warn("No 0DTE contracts found", { date: today, type: optionType });
+    logger.warn("No contracts found", { date: expDate, type: optionType });
     return null;
   }
 
@@ -387,11 +438,11 @@ async function selectOption(
   if (greeksConfig.searchExtendedFirst) {
     // YOLO: search entire ATM → 3% OTM zone in one pass
     const allCandidates = filterZone(0, EXTENDED_OTM_PERCENT);
-    bestOption = await scoreCandidates(creds, allCandidates, optionType, spyPrice, budget, EXTENDED_OTM_PERCENT, greeksConfig);
+    bestOption = await scoreCandidates(creds, allCandidates, optionType, spyPrice, budget, EXTENDED_OTM_PERCENT, greeksConfig, useTheta);
   } else {
     // Safe/Degen: primary zone first, extended as fallback
     const primaryCandidates = filterZone(0, MAX_OTM_PERCENT);
-    bestOption = await scoreCandidates(creds, primaryCandidates, optionType, spyPrice, budget, MAX_OTM_PERCENT, greeksConfig);
+    bestOption = await scoreCandidates(creds, primaryCandidates, optionType, spyPrice, budget, MAX_OTM_PERCENT, greeksConfig, useTheta);
 
     if (!bestOption) {
       const extendedCandidates = filterZone(MAX_OTM_PERCENT, EXTENDED_OTM_PERCENT);
@@ -402,7 +453,7 @@ async function selectOption(
           riskLevel,
           extendedStrikes: extendedCandidates.length,
         });
-        bestOption = await scoreCandidates(creds, extendedCandidates, optionType, spyPrice, budget, EXTENDED_OTM_PERCENT, greeksConfig);
+        bestOption = await scoreCandidates(creds, extendedCandidates, optionType, spyPrice, budget, EXTENDED_OTM_PERCENT, greeksConfig, useTheta);
       }
     }
   }
@@ -507,13 +558,14 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
       now.toLocaleString("en-US", { timeZone: "America/New_York" }),
     );
     const currentMinutes = est.getHours() * 60 + est.getMinutes();
-    const pastCutoff = currentMinutes >= ENTRY_CUTOFF_MINUTES;
+    const cutoffMinutes = cfg.tradeType === "1dte" ? ENTRY_CUTOFF_MINUTES_1DTE : ENTRY_CUTOFF_MINUTES_0DTE;
+    const pastCutoff = currentMinutes >= cutoffMinutes;
 
     logger.info(pastCutoff ? "HOLD at cutoff — skipping day" : "HOLD signal — will retry", {
       bot: botLabel,
       bull: bullishPercent,
       bear: bearishPercent,
-      cutoffAt: "11:00 AM EST",
+      cutoffAt: cfg.tradeType === "1dte" ? "1:00 PM EST" : "11:00 AM EST",
       pastCutoff,
     });
 
@@ -609,7 +661,9 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
   const budget = equity * RISK_ALLOCATION[cfg.riskLevel] * vixMult;
 
   // Select optimal option contract given our budget
-  const option = await selectOption(creds, signal, spyPrice, budget, cfg.riskLevel);
+  const is1dte = cfg.tradeType === "1dte";
+  const expirationDate = is1dte ? getNextTradingDayEST() : getTodayEST();
+  const option = await selectOption(creds, signal, spyPrice, budget, cfg.riskLevel, expirationDate, is1dte);
   if (!option) {
     insertTradeLog({
       mode: cfg.mode,
@@ -620,7 +674,7 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
       price: null,
       orderId: null,
       status: "error",
-      message: `${signal} but no 0DTE option found (SPY $${spyPrice.toFixed(2)}, budget $${budget.toFixed(2)})`,
+      message: `${signal} but no ${cfg.tradeType} option found (SPY $${spyPrice.toFixed(2)}, budget $${budget.toFixed(2)}, exp ${expirationDate})`,
     });
     // Do NOT mark as traded — allow retry at next scheduled evaluation
     return;
@@ -680,7 +734,7 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
 
     const entryLogId = insertTradeLog({
       mode: cfg.mode,
-      action: `0dte_${signal.toLowerCase()}`,
+      action: `${cfg.tradeType}_${signal.toLowerCase()}`,
       symbol: option.symbol,
       side: "buy",
       qty,
@@ -719,6 +773,8 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
       stopLossPct: exitParams.stopLossPct,
       profitTargetPct: exitParams.profitTargetPct,
       vixAtEntry: vixLevel,
+      tradeType: is1dte ? "1dte" : "0dte",
+      expirationDate,
     });
 
     tradedToday.set(botKey, true);
@@ -727,7 +783,7 @@ async function executeTrade(cfg: TradeBotConfig): Promise<void> {
     logger.error("Order placement failed", { bot: botLabel, error: msg });
     insertTradeLog({
       mode: cfg.mode,
-      action: `0dte_${signal.toLowerCase()}_failed`,
+      action: `${cfg.tradeType}_${signal.toLowerCase()}_failed`,
       symbol: option.symbol,
       side: "buy",
       qty,
@@ -778,8 +834,8 @@ async function monitorPositions(): Promise<void> {
         reason = `Stop loss hit (${(pnlPct * 100).toFixed(1)}%${pos.vixAtEntry ? `, VIX ${pos.vixAtEntry.toFixed(1)}` : ""})`;
       }
 
-      // 2. Near market close: force exit
-      if (!shouldClose && isNearClose()) {
+      // 2. Near market close: force exit (but only if option expires today)
+      if (!shouldClose && isNearClose() && pos.expirationDate === getTodayEST()) {
         shouldClose = true;
         reason = `Market close exit (P/L: ${(pnlPct * 100).toFixed(1)}%)`;
       }
@@ -913,7 +969,7 @@ export async function evaluateAndTrade(): Promise<void> {
 
   const configs = getAllTradeBotConfigs();
   for (const cfg of configs) {
-    if (cfg.tradeType !== "0dte") continue;
+    if (cfg.tradeType !== "0dte" && cfg.tradeType !== "1dte") continue;
 
     try {
       await executeTrade(cfg);
@@ -933,10 +989,21 @@ export async function evaluateAndTrade(): Promise<void> {
  * Called near market close as a safety net.
  */
 export async function closeBeforeMarketClose(): Promise<void> {
-  logger.info("Near market close — closing all 0DTE positions");
+  logger.info("Near market close — closing expiring positions");
 
-  // First, close any tracked active positions
+  const today = getTodayEST();
+
+  // First, close any tracked active positions that expire today
   for (const [botKey, pos] of activePositions.entries()) {
+    // Skip 1DTE positions that don't expire until tomorrow
+    if (pos.expirationDate !== today) {
+      logger.info("Skipping non-expiring position (1DTE overnight hold)", {
+        botKey,
+        symbol: pos.optionSymbol,
+        expirationDate: pos.expirationDate,
+      });
+      continue;
+    }
     try {
       const order = await closePosition(pos.creds, pos.optionSymbol);
       const exitLogId = insertTradeLog({

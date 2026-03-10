@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.9.1] - 2026-03-09
+
+- Fix historical tracker overwriting market-hours signal with overnight data
+- Once a day gets a directional recommendation (CALLS/PUTS), it stays locked in
+- Add WSB food/cooking metaphor sentiment patterns (roasted bulls, bear meat, grilled bers)
+- Dashboard recommendation card now shows trade bot's 48h time-decayed signal
+- Steeper time-decay: 17.5h+ comments at 0.1x weight (was 0.3x)
+- Trade bot retries on failed option lookup instead of giving up
+- Initial trade delayed to 9:45 AM EST for quote availability
+- Persistent file logging to logs/wsb.log
+
+
 ## [1.9.0] - 2026-03-09
 
 - Dashboard recommendation card now shows the trade bot's actual 48h time-decayed signal instead of the current thread's sentiment

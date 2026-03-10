@@ -3352,13 +3352,13 @@
             container.appendChild(row);
 
             // Inline expandable settings panel
-            var panelId = "tb-settings-" + bot.mode + "-" + (bot.paperTrading ? "paper" : "live");
-            var settingsPanel = document.createElement("div");
+            const panelId = "tb-settings-" + bot.mode + "-" + (bot.paperTrading ? "paper" : "live");
+            const settingsPanel = document.createElement("div");
             settingsPanel.id = panelId;
             settingsPanel.style.cssText = "display:none; padding:12px 16px 16px 52px; margin-top:-4px; border-bottom:1px solid var(--border);";
-            var riskBtns = ["safe", "degen", "yolo"].map(function(lvl) {
-              var pcts = { safe: "30%", degen: "50%", yolo: "70%" };
-              var active = lvl === risk ? " active" : "";
+            const riskBtns = ["safe", "degen", "yolo"].map(function(lvl) {
+              const pcts = { safe: "30%", degen: "50%", yolo: "70%" };
+              const active = lvl === risk ? " active" : "";
               return '<button class="tb-risk-btn' + active + '" data-risk="' + lvl +
                 '" style="padding:6px 14px; margin-right:6px; border-radius:6px; border:1px solid var(--border); background:' +
                 (lvl === risk ? "var(--blue)" : "var(--surface-raised)") +
@@ -3366,10 +3366,10 @@
                 '; cursor:pointer; font-size:0.78rem; font-weight:600; text-transform:uppercase;">' +
                 lvl + " " + pcts[lvl] + "</button>";
             }).join("");
-            var tradeType = bot.tradeType || "0dte";
-            var typeBtns = ["0dte", "1dte"].map(function(t) {
-              var labels = { "0dte": "0DTE", "1dte": "1DTE" };
-              var active = t === tradeType ? " active" : "";
+            const tradeType = bot.tradeType || "0dte";
+            const typeBtns = ["0dte", "1dte"].map(function(t) {
+              const labels = { "0dte": "0DTE", "1dte": "1DTE" };
+              const active = t === tradeType ? " active" : "";
               return '<button class="tb-type-btn' + active + '" data-tradetype="' + t +
                 '" style="padding:6px 14px; margin-right:6px; border-radius:6px; border:1px solid var(--border); background:' +
                 (t === tradeType ? "var(--blue)" : "var(--surface-raised)") +
@@ -3377,7 +3377,7 @@
                 '; cursor:pointer; font-size:0.78rem; font-weight:600; text-transform:uppercase;">' +
                 labels[t] + "</button>";
             }).join("");
-            var vixChecked = bot.vixEnabled ? " checked" : "";
+            const vixChecked = bot.vixEnabled ? " checked" : "";
             settingsPanel.innerHTML =
               '<div style="margin-bottom:8px; font-size:0.75rem; color:var(--text-muted); font-weight:600;">TRADE TYPE</div>' +
               '<div style="margin-bottom:10px;">' + typeBtns + '</div>' +
@@ -3430,7 +3430,7 @@
             });
 
             // Wire up VIX toggle visual
-            var vixInput = settingsPanel.querySelector(".tb-vix-toggle");
+            const vixInput = settingsPanel.querySelector(".tb-vix-toggle");
             if (vixInput) {
               vixInput.addEventListener("change", function() {
                 var slider = this.parentElement.querySelectorAll("span");

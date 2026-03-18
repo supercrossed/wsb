@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-03-18T13:52:59.257Z",
+  "updated_at": "2026-03-18T14:53:49.125Z",
   "entries": [
     {
       "date": "2026-03-06",
@@ -194,13 +194,13 @@
     },
     {
       "date": "2026-03-18",
-      "bullish_count": 419,
-      "bearish_count": 538,
-      "neutral_count": 5524,
-      "total_comments": 6481,
-      "bullish_percent": 6.47,
-      "bearish_percent": 8.3,
-      "neutral_percent": 85.23,
+      "bullish_count": 646,
+      "bearish_count": 897,
+      "neutral_count": 8527,
+      "total_comments": 10070,
+      "bullish_percent": 6.42,
+      "bearish_percent": 8.91,
+      "neutral_percent": 84.67,
       "recommendation": "CALLS",
       "thread_type": "daily"
     }

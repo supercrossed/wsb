@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-03-19T22:12:59.195Z",
+  "updated_at": "2026-03-19T23:13:59.142Z",
   "entries": [
     {
       "date": "2026-03-06",
@@ -236,13 +236,13 @@
     },
     {
       "date": "2026-03-20",
-      "bullish_count": 168,
-      "bearish_count": 109,
-      "neutral_count": 2339,
-      "total_comments": 2616,
-      "bullish_percent": 6.42,
-      "bearish_percent": 4.17,
-      "neutral_percent": 89.41,
+      "bullish_count": 232,
+      "bearish_count": 164,
+      "neutral_count": 3053,
+      "total_comments": 3449,
+      "bullish_percent": 6.73,
+      "bearish_percent": 4.76,
+      "neutral_percent": 88.51,
       "recommendation": "PUTS",
       "thread_type": "overnight"
     }

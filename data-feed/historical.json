@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-03-23T19:06:59.276Z",
+  "updated_at": "2026-03-23T20:07:59.191Z",
   "entries": [
     {
       "date": "2026-03-06",
@@ -102,6 +102,15 @@
     },
     {
       "date": "2026-03-23",
+      "wsb_sentiment": "bearish",
+      "inverse_recommendation": "CALLS",
+      "spy_open": null,
+      "spy_close": null,
+      "spy_change": null,
+      "inverse_correct": null
+    },
+    {
+      "date": "2026-03-24",
       "wsb_sentiment": "bearish",
       "inverse_recommendation": "CALLS",
       "spy_open": null,
@@ -257,15 +266,27 @@
     },
     {
       "date": "2026-03-23",
-      "bullish_count": 2786,
-      "bearish_count": 3110,
-      "neutral_count": 42512,
-      "total_comments": 48408,
+      "bullish_count": 2925,
+      "bearish_count": 3263,
+      "neutral_count": 44578,
+      "total_comments": 50766,
       "bullish_percent": 5.76,
-      "bearish_percent": 6.42,
-      "neutral_percent": 87.82,
+      "bearish_percent": 6.43,
+      "neutral_percent": 87.81,
       "recommendation": "CALLS",
       "thread_type": "daily"
+    },
+    {
+      "date": "2026-03-24",
+      "bullish_count": 17,
+      "bearish_count": 25,
+      "neutral_count": 171,
+      "total_comments": 213,
+      "bullish_percent": 7.98,
+      "bearish_percent": 11.74,
+      "neutral_percent": 80.28,
+      "recommendation": "CALLS",
+      "thread_type": "overnight"
     }
   ]
 }

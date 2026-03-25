@@ -1,12 +1,12 @@
 {
-  "updated_at": "2026-03-25T20:00:06.189Z",
+  "updated_at": "2026-03-25T20:30:05.995Z",
   "decayed": {
-    "bullish": 1515.2,
-    "bearish": 1827.2,
-    "neutral": 24259.1,
-    "rawTotal": 54187,
-    "bullishPercent": 5.49,
-    "bearishPercent": 6.62
+    "bullish": 1452.8,
+    "bearish": 1763.9,
+    "neutral": 23532.6,
+    "rawTotal": 54027,
+    "bullishPercent": 5.43,
+    "bearishPercent": 6.59
   },
   "signals": {
     "wsb": "PUTS",

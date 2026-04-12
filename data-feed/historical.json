@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-04-12T12:54:59.194Z",
+  "updated_at": "2026-04-12T13:55:59.833Z",
   "entries": [
     {
       "date": "2026-03-06",
@@ -572,10 +572,10 @@
     },
     {
       "date": "2026-04-13",
-      "bullish_count": 1207,
-      "bearish_count": 1084,
-      "neutral_count": 21573,
-      "total_comments": 23864,
+      "bullish_count": 1289,
+      "bearish_count": 1157,
+      "neutral_count": 23044,
+      "total_comments": 25490,
       "bullish_percent": 5.06,
       "bearish_percent": 4.54,
       "neutral_percent": 90.4,

@@ -1,12 +1,12 @@
 {
-  "updated_at": "2026-04-21T18:00:06.171Z",
+  "updated_at": "2026-04-21T18:30:06.165Z",
   "decayed": {
-    "bullish": 1859.9,
-    "bearish": 1595.7,
-    "neutral": 20806.9,
-    "rawTotal": 44166,
-    "bullishPercent": 7.67,
-    "bearishPercent": 6.58
+    "bullish": 1846.5,
+    "bearish": 1612.4,
+    "neutral": 20710.9,
+    "rawTotal": 44574,
+    "bullishPercent": 7.64,
+    "bearishPercent": 6.67
   },
   "signals": {
     "wsb": "CALLS",
@@ -14,12 +14,12 @@
   },
   "daily": {
     "date": "2026-04-21",
-    "bullishCount": 1937,
-    "bearishCount": 1545,
-    "neutralCount": 19333,
-    "totalComments": 22815,
-    "bullishPercent": 8.49,
-    "bearishPercent": 6.77,
+    "bullishCount": 2024,
+    "bearishCount": 1645,
+    "neutralCount": 20461,
+    "totalComments": 24130,
+    "bullishPercent": 8.39,
+    "bearishPercent": 6.82,
     "recommendation": "PUTS",
     "threadType": "daily"
   }

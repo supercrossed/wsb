@@ -1,11 +1,11 @@
 {
-  "updated_at": "2026-05-01T20:00:06.129Z",
+  "updated_at": "2026-05-01T20:30:06.141Z",
   "decayed": {
-    "bullish": 1646.6,
-    "bearish": 1196.3,
-    "neutral": 17770.4,
-    "rawTotal": 48323,
-    "bullishPercent": 7.99,
+    "bullish": 1564.5,
+    "bearish": 1157.8,
+    "neutral": 17251.5,
+    "rawTotal": 46825,
+    "bullishPercent": 7.83,
     "bearishPercent": 5.8
   },
   "signals": {

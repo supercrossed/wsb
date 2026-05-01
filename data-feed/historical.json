@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-05-01T19:35:06.273Z",
+  "updated_at": "2026-05-01T20:35:07.376Z",
   "entries": [
     {
       "date": "2026-03-06",
@@ -363,6 +363,15 @@
     },
     {
       "date": "2026-05-01",
+      "wsb_sentiment": "bullish",
+      "inverse_recommendation": "PUTS",
+      "spy_open": null,
+      "spy_close": null,
+      "spy_change": null,
+      "inverse_correct": null
+    },
+    {
+      "date": "2026-05-04",
       "wsb_sentiment": "bullish",
       "inverse_recommendation": "PUTS",
       "spy_open": null,
@@ -866,15 +875,27 @@
     },
     {
       "date": "2026-05-01",
-      "bullish_count": 1782,
-      "bearish_count": 1248,
-      "neutral_count": 17322,
-      "total_comments": 20352,
-      "bullish_percent": 8.76,
-      "bearish_percent": 6.13,
-      "neutral_percent": 85.11,
+      "bullish_count": 1826,
+      "bearish_count": 1284,
+      "neutral_count": 17991,
+      "total_comments": 21101,
+      "bullish_percent": 8.65,
+      "bearish_percent": 6.09,
+      "neutral_percent": 85.26,
       "recommendation": "PUTS",
       "thread_type": "daily"
+    },
+    {
+      "date": "2026-05-04",
+      "bullish_count": 42,
+      "bearish_count": 69,
+      "neutral_count": 693,
+      "total_comments": 804,
+      "bullish_percent": 5.22,
+      "bearish_percent": 8.58,
+      "neutral_percent": 86.2,
+      "recommendation": "CALLS",
+      "thread_type": "weekend"
     }
   ]
 }

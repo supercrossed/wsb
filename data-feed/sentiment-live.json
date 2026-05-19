@@ -1,12 +1,12 @@
 {
-  "updated_at": "2026-05-19T20:00:06.113Z",
+  "updated_at": "2026-05-19T20:30:06.037Z",
   "decayed": {
-    "bullish": 1733.5,
-    "bearish": 1644.1,
-    "neutral": 21035.6,
-    "rawTotal": 48036,
-    "bullishPercent": 7.1,
-    "bearishPercent": 6.73
+    "bullish": 1687.9,
+    "bearish": 1620.1,
+    "neutral": 21025.3,
+    "rawTotal": 48100,
+    "bullishPercent": 6.94,
+    "bearishPercent": 6.66
   },
   "signals": {
     "wsb": "HOLD",

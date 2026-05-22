@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-05-22T15:00:07.723Z",
+  "updated_at": "2026-05-22T16:00:07.634Z",
   "entries": [
     {
       "date": "2026-03-06",
@@ -1139,14 +1139,14 @@
     },
     {
       "date": "2026-05-22",
-      "bullish_count": 633,
-      "bearish_count": 727,
-      "neutral_count": 7492,
-      "total_comments": 8852,
-      "bullish_percent": 7.15,
-      "bearish_percent": 8.21,
-      "neutral_percent": 84.64,
-      "recommendation": "CALLS",
+      "bullish_count": 859,
+      "bearish_count": 912,
+      "neutral_count": 9506,
+      "total_comments": 11277,
+      "bullish_percent": 7.62,
+      "bearish_percent": 8.09,
+      "neutral_percent": 84.29,
+      "recommendation": "HOLD",
       "thread_type": "daily"
     }
   ]

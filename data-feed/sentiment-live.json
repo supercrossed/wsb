@@ -1,12 +1,12 @@
 {
-  "updated_at": "2026-05-26T20:00:05.887Z",
+  "updated_at": "2026-05-26T20:30:05.739Z",
   "decayed": {
-    "bullish": 1637,
-    "bearish": 1382.8,
-    "neutral": 18072.4,
-    "rawTotal": 34834,
-    "bullishPercent": 7.76,
-    "bearishPercent": 6.56
+    "bullish": 1649.1,
+    "bearish": 1400.9,
+    "neutral": 17790.8,
+    "rawTotal": 35304,
+    "bullishPercent": 7.91,
+    "bearishPercent": 6.72
   },
   "signals": {
     "wsb": "CALLS",

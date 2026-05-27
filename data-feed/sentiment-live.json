@@ -1,12 +1,12 @@
 {
-  "updated_at": "2026-05-27T15:30:05.831Z",
+  "updated_at": "2026-05-27T16:00:05.964Z",
   "decayed": {
-    "bullish": 2317.6,
-    "bearish": 2117,
-    "neutral": 21316.6,
-    "rawTotal": 45136,
-    "bullishPercent": 9,
-    "bearishPercent": 8.22
+    "bullish": 2341.4,
+    "bearish": 2148.6,
+    "neutral": 21730.3,
+    "rawTotal": 45478,
+    "bullishPercent": 8.93,
+    "bearishPercent": 8.19
   },
   "signals": {
     "wsb": "HOLD",
@@ -14,12 +14,12 @@
   },
   "daily": {
     "date": "2026-05-27",
-    "bullishCount": 1504,
-    "bearishCount": 1506,
-    "neutralCount": 12535,
-    "totalComments": 15545,
-    "bullishPercent": 9.68,
-    "bearishPercent": 9.69,
+    "bullishCount": 1600,
+    "bearishCount": 1611,
+    "neutralCount": 13772,
+    "totalComments": 16983,
+    "bullishPercent": 9.42,
+    "bearishPercent": 9.49,
     "recommendation": "HOLD",
     "threadType": "daily"
   }
